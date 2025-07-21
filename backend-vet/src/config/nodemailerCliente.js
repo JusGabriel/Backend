@@ -1,7 +1,6 @@
-// nodemailerCliente.js
-import nodemailer from "nodemailer"
-import dotenv from 'dotenv'
-dotenv.config()
+import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+dotenv.config();
 
 let transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -11,72 +10,106 @@ let transporter = nodemailer.createTransport({
         user: process.env.USER_MAILTRAP,
         pass: process.env.PASS_MAILTRAP,
     }
-})
+});
 
+/**
+ * 📩 Plantilla HTML Profesional para Correos (reutilizable)
+ * @param {string} title - Título principal
+ * @param {string} message - Mensaje del cuerpo (puede contener HTML)
+ * @param {string} buttonText - Texto del botón
+ * @param {string} buttonLink - URL para el botón
+ * @returns {string} - HTML para correo
+ */
+const emailTemplate = (title, message, buttonText, buttonLink) => {
+    return `
+    <div style="max-width:600px; margin:0 auto; background:#fff; border:1px solid #e0e0e0; border-radius:12px; overflow:hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333;">
+        
+        <!-- Imagen cabecera -->
+        <div style="background-color:#f9f9f9;">
+            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" alt="Logo QuitoEmprende" style="width:100%; max-height:200px; object-fit:cover;">
+        </div>
+
+        <!-- Contenido -->
+        <div style="padding:25px;">
+            <h1 style="color:#004080; font-size:24px; margin-top:0;">${title}</h1>
+            <p style="font-size:16px; line-height:1.6; color:#555;">${message}</p>
+
+            <div style="text-align:center; margin:30px 0;">
+                <a href="${buttonLink}" 
+                   style="background-color:#007bff; color:#fff; text-decoration:none; padding:14px 28px; border-radius:6px; font-size:16px; font-weight:600; display:inline-block;">
+                   ${buttonText}
+                </a>
+            </div>
+
+            <p style="font-size:14px; color:#999; text-align:center;">
+                Si no solicitaste esta acción, puedes ignorar este mensaje.<br>
+                Tu información está protegida.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color:#f2f2f2; padding:18px; text-align:center; font-size:13px; color:#777;">
+            <p style="margin:0;">© 2024 QuitoEmprende · Todos los derechos reservados</p>
+            <p style="margin:4px 0 0;">Impulsando ideas, conectando emprendedores</p>
+        </div>
+    </div>`;
+};
+
+// 📧 Confirmación de cuenta para CLIENTE
 const sendMailToRegisterCliente = (userMail, token) => {
-    const confirmUrl = `${process.env.URL_FRONTEND}confirm/${token}`
+    const confirmationUrl = `${process.env.URL_FRONTEND}confirm/${token}`;
+
+    const htmlContent = emailTemplate(
+        "Bienvenido a QuitoEmprende",
+        `Gracias por registrarte como <strong>CLIENTE</strong>. Para completar tu registro, haz clic en el siguiente botón:`,
+        "Confirmar Cuenta",
+        confirmationUrl
+    );
 
     let mailOptions = {
         from: '"QuitoEmprende" <no-reply@quitoemprende.com>',
         to: userMail,
         subject: "QuitoEmprende - Confirmación de Cuenta para Cliente",
-        html: `
-            <div style="font-family: Arial, sans-serif; color: #333;">
-                <h2>Bienvenido a QuitoEmprende</h2>
-                <p>Gracias por registrarte como CLIENTE. Haz clic en el siguiente enlace para confirmar tu cuenta:</p>
-                <p>
-                    <a href="${confirmUrl}" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">
-                        Confirmar Cuenta
-                    </a>
-                </p>
-                <p>Si no solicitaste este registro, puedes ignorar este correo.</p>
-                <footer style="font-size: 0.9em; color: #777;">
-                    El equipo de <strong>QuitoEmprende</strong>.
-                </footer>
-            </div>
-        `
-    }
+        html: htmlContent
+    };
 
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
-            console.log("Error al enviar correo: ", error)
+            console.error("❌ Error al enviar correo de registro cliente:", error);
         } else {
-            console.log("Mensaje enviado: ", info.messageId)
+            console.log("✅ Correo de confirmación cliente enviado:", info.messageId);
         }
-    })
-}
+    });
+};
 
+// 🔑 Recuperación de contraseña para CLIENTE
 const sendMailToRecoveryPasswordCliente = (userMail, token) => {
-    const recoveryUrl = `${process.env.URL_FRONTEND}reset/${token}`
+    const recoveryUrl = `${process.env.URL_FRONTEND}reset/${token}`;
+
+    const htmlContent = emailTemplate(
+        "Recuperación de Contraseña",
+        `Recibimos una solicitud para restablecer tu contraseña en <strong>QuitoEmprende</strong>. Si tú la solicitaste, haz clic en el botón para continuar.`,
+        "Reestablecer Contraseña",
+        recoveryUrl
+    );
 
     let mailOptions = {
         from: '"QuitoEmprende" <no-reply@quitoemprende.com>',
         to: userMail,
         subject: "QuitoEmprende - Reestablece tu Contraseña de Cliente",
-        html: `
-            <div style="font-family: Arial, sans-serif; color: #333;">
-                <h2>Recuperación de Contraseña</h2>
-                <p>Haz clic en el siguiente enlace para restablecer tu contraseña:</p>
-                <p>
-                    <a href="${recoveryUrl}" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">
-                        Reestablecer Contraseña
-                    </a>
-                </p>
-                <p>Si no solicitaste este cambio, ignora este mensaje.</p>
-            </div>
-        `
-    }
+        html: htmlContent
+    };
 
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
-            console.log("Error al enviar correo: ", error)
+            console.error("❌ Error al enviar correo de recuperación cliente:", error);
         } else {
-            console.log("Mensaje enviado: ", info.messageId)
+            console.log("✅ Correo de recuperación cliente enviado:", info.messageId);
         }
-    })
-}
+    });
+};
 
 export {
     sendMailToRegisterCliente,
     sendMailToRecoveryPasswordCliente
-}
+};
