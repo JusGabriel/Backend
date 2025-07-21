@@ -37,6 +37,10 @@ const emprendedorSchema = new Schema({
     default: null,
     trim: true
   },
+  rol:{
+        type:String,
+        default:"Emprendedor"
+    },
   categorias: [{
     type: Schema.Types.ObjectId,
     ref: 'Categoria'
@@ -52,6 +56,11 @@ const emprendedorSchema = new Schema({
   status: {
     type: Boolean,
     default: true
+  },
+  estado_Emprendedor: {
+    type: String,
+    enum: ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido'], 
+    default: 'Activo'
   }
 }, {
   timestamps: true
