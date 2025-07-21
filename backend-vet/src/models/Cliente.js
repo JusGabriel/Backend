@@ -33,6 +33,10 @@ favoritos: [{
     default: null,
     trim: true
   },
+  rol:{
+        type:String,
+        default:"Cliente"
+    },
   token: {
     type: String,
     default: null
@@ -44,6 +48,11 @@ favoritos: [{
   status: {
     type: Boolean,
     default: true
+  },
+  estado_Emprendedor: {
+    type: String,
+    enum: ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido'], 
+    default: 'Activo'
   }
 }, {
   timestamps: true
