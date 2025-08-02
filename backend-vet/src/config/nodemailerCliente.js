@@ -57,7 +57,7 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
 
 // 📧 Confirmación de cuenta para CLIENTE
 const sendMailToRegisterCliente = (userMail, token) => {
-    const confirmationUrl = `${process.env.URL_FRONTEND}confirm/${token}`;
+    const confirmationUrl = `${process.env.URL_FRONTEND}/confirm/${token}`;
 
     const htmlContent = emailTemplate(
         "Bienvenido a QuitoEmprende",
@@ -84,7 +84,7 @@ const sendMailToRegisterCliente = (userMail, token) => {
 
 // 🔑 Recuperación de contraseña para CLIENTE
 const sendMailToRecoveryPasswordCliente = (userMail, token) => {
-    const recoveryUrl = `${process.env.URL_FRONTEND}reset/${token}`;
+    const recoveryUrl = `${process.env.URL_FRONTEND}/reset/${token}`;
 
     const htmlContent = emailTemplate(
         "Recuperación de Contraseña",
@@ -113,3 +113,4 @@ export {
     sendMailToRegisterCliente,
     sendMailToRecoveryPasswordCliente
 };
+
