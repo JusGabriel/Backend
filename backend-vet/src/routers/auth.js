@@ -11,7 +11,6 @@ router.get('/google/cliente/callback',
   passport.authenticate('google-cliente', { failureRedirect: '/login-failed' }),
   (req, res) => {
     const token = crearTokenJWT(req.user._id, req.user.rol);
-    // Redirige al frontend enviando token y rol por query params
     res.redirect(`${process.env.URL_FRONTEND}/dashboard?token=${token}&rol=${req.user.rol}`);
   }
 );
