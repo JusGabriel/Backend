@@ -57,7 +57,7 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
 
 // 📧 Confirmación de Cuenta
 const sendMailToRegister = (userMail, token) => {
-    const confirmationUrl = `${process.env.URL_FRONTEND}confirm/${token}`;
+    const confirmationUrl = `${process.env.URL_FRONTEND}/confirm/${token}`;
 
     const htmlContent = emailTemplate(
         "Confirma tu Cuenta",
@@ -84,7 +84,7 @@ const sendMailToRegister = (userMail, token) => {
 
 // 🔑 Recuperación de Contraseña
 const sendMailToRecoveryPassword = (userMail, token) => {
-    const recoveryUrl = `${process.env.URL_FRONTEND}reset/admin/${token}`;
+    const recoveryUrl = `${process.env.URL_FRONTEND}/reset/admin/${token}`;
 
     const htmlContent = emailTemplate(
         "Reestablece tu Contraseña",
