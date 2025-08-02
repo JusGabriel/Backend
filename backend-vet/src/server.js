@@ -7,17 +7,16 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import adminRoutes from './routers/administrador_routes.js';
 import routerClientes from './routers/cliente_routes.js';
 import routerEmprendedores from './routers/emprendedor_routes.js';
-import authRoutes from './routers/auth.js'; // Rutas de autenticación
+import authRoutes from './routers/auth.js'; // Importa el router auth
 import dotenv from 'dotenv';
 import Cliente from './models/Cliente.js';
 import Emprendedor from './models/Emprendedor.js';
-import { crearTokenJWT } from './middleware/JWT.js';
 
 dotenv.config();
 
 const app = express();
 
-// Configuración de sesión y passport
+// Sesión y Passport
 app.use(session({
   secret: 'quitoemprende123',
   resave: false,
@@ -35,7 +34,7 @@ app.use(cors({
 app.use(express.json());
 app.use(morgan('dev'));
 
-// Serialización y deserialización para Passport
+// Serialización y deserialización
 passport.serializeUser((user, done) => {
   done(null, user._id);
 });
@@ -52,7 +51,7 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Estrategia Google para Cliente
+// Estrategias Google para Clientes y Emprendedores
 passport.use('google-cliente', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
@@ -78,7 +77,6 @@ passport.use('google-cliente', new GoogleStrategy({
   }
 }));
 
-// Estrategia Google para Emprendedor
 passport.use('google-emprendedor', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
@@ -104,28 +102,29 @@ passport.use('google-emprendedor', new GoogleStrategy({
   }
 }));
 
-// Rutas
+// Usa el router auth para manejar rutas /auth/...
 app.use('/auth', authRoutes);
+
+// Rutas de administrador, clientes y emprendedores
 app.use('/api/administradores', adminRoutes);
 app.use('/api/clientes', routerClientes);
 app.use('/api/emprendedores', routerEmprendedores);
 
-// Ruta para obtener estado y usuario autenticado + token + rol
+// Ruta para estado de sesión
 app.get('/api/status', (req, res) => {
   if (req.isAuthenticated()) {
-    const token = crearTokenJWT(req.user._id, req.user.rol);
-    res.json({ usuario: req.user, token, rol: req.user.rol });
+    res.json({ usuario: req.user });
   } else {
     res.json({ usuario: null });
   }
 });
 
-// Ruta raíz prueba
+// Ruta raíz para prueba
 app.get('/', (req, res) => {
   res.send('🌐 API funcionando correctamente');
 });
 
-// Manejo 404
+// Manejo de rutas no encontradas
 app.use((req, res) => {
   res.status(404).send("Endpoint no encontrado");
 });
