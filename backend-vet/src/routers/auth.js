@@ -21,8 +21,8 @@ router.get('/google/cliente/callback',
       { expiresIn: '1d' }
     );
 
-    // Nota: usamos "rol" como parámetro en la URL
-    res.redirect(`${process.env.URL_FRONTEND}/dashboard?token=${token}&rol=${req.user.rol}`);
+    // ✅ Redirige al frontend a /login con token y rol
+    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}`);
   }
 );
 
@@ -43,7 +43,8 @@ router.get('/google/emprendedor/callback',
       { expiresIn: '1d' }
     );
 
-    res.redirect(`${process.env.URL_FRONTEND}/dashboard?token=${token}&rol=${req.user.rol}`);
+    // ✅ Redirige al frontend a /login con token y rol
+    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}`);
   }
 );
 
