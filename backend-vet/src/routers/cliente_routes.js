@@ -8,8 +8,12 @@ import {
   login,
   verClientes,
   actualizarCliente,
-  eliminarCliente
+  eliminarCliente,
+  perfil,
+  actualizarPassword,
+  actualizarPerfil
 } from "../controllers/cliente_controllers.js"
+import { verificarTokenJWT } from '../middleware/JWT.js'
 
 const router = Router()
 
@@ -29,5 +33,10 @@ router.post("/nuevo-password/:token", crearNuevoPassword)
 router.get("/todos", verClientes)
 router.put("/actualizar/:id", actualizarCliente)
 router.delete("/eliminar/:id", eliminarCliente)
+
+// Perfil protegido
+router.get("/perfil", verificarTokenJWT, perfil)
+router.put("/cliente/:id", verificarTokenJWT, actualizarPerfil)
+router.put("/cliente/actualizarpassword/:id", verificarTokenJWT, actualizarPassword)
 
 export default router
