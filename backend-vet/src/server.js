@@ -7,7 +7,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import adminRoutes from './routers/administrador_routes.js';
 import routerClientes from './routers/cliente_routes.js';
 import routerEmprendedores from './routers/emprendedor_routes.js';
-import authRoutes from './routers/auth.js'; // Importa el router auth
+import authRoutes from './routers/auth.js';
 import dotenv from 'dotenv';
 import Cliente from './models/Cliente.js';
 import Emprendedor from './models/Emprendedor.js';
@@ -51,51 +51,74 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Estrategias Google para Clientes y Emprendedores
+// Estrategia Google para Cliente
 passport.use('google-cliente', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   callbackURL: `${process.env.URL_BACKEND}/auth/google/cliente/callback`
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    let user = await Cliente.findOne({ email: profile.emails[0].value });
+    let user = await Cliente.findOne({ idGoogle: profile.id });
+
     if (!user) {
-      user = new Cliente({
-        nombre: profile.name?.givenName || profile.displayName || 'SinNombre',
-        apellido: profile.name?.familyName || '',
-        email: profile.emails[0].value,
-        idGoogle: profile.id,
-        confirmEmail: true,
-        rol: 'Cliente',
-        password: '',
-      });
-      await user.save();
+      user = await Cliente.findOne({ email: profile.emails[0].value });
+
+      if (user && !user.idGoogle) {
+        user.idGoogle = profile.id;
+        await user.save();
+      }
+
+      if (!user) {
+        user = new Cliente({
+          nombre: profile.name?.givenName || profile.displayName || 'SinNombre',
+          apellido: profile.name?.familyName || '',
+          email: profile.emails[0].value,
+          idGoogle: profile.id,
+          confirmEmail: true,
+          rol: 'Cliente',
+          password: '',
+        });
+        await user.save();
+      }
     }
+
     return done(null, user);
   } catch (error) {
     return done(error, null);
   }
 }));
 
+// Estrategia Google para Emprendedor (✅ ACTUALIZADA)
 passport.use('google-emprendedor', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   callbackURL: `${process.env.URL_BACKEND}/auth/google/emprendedor/callback`
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    let user = await Emprendedor.findOne({ email: profile.emails[0].value });
+    let user = await Emprendedor.findOne({ idGoogle: profile.id });
+
     if (!user) {
-      user = new Emprendedor({
-        nombre: profile.name?.givenName || profile.displayName || 'SinNombre',
-        apellido: profile.name?.familyName || '',
-        email: profile.emails[0].value,
-        idGoogle: profile.id,
-        confirmEmail: true,
-        rol: 'Emprendedor',
-        password: '',
-      });
-      await user.save();
+      user = await Emprendedor.findOne({ email: profile.emails[0].value });
+
+      if (user && !user.idGoogle) {
+        user.idGoogle = profile.id;
+        await user.save();
+      }
+
+      if (!user) {
+        user = new Emprendedor({
+          nombre: profile.name?.givenName || profile.displayName || 'SinNombre',
+          apellido: profile.name?.familyName || '',
+          email: profile.emails[0].value,
+          idGoogle: profile.id,
+          confirmEmail: true,
+          rol: 'Emprendedor',
+          password: '',
+        });
+        await user.save();
+      }
     }
+
     return done(null, user);
   } catch (error) {
     return done(error, null);
@@ -119,12 +142,12 @@ app.get('/api/status', (req, res) => {
   }
 });
 
-// Ruta raíz para prueba
+// Ruta raíz
 app.get('/', (req, res) => {
   res.send('🌐 API funcionando correctamente');
 });
 
-// Manejo de rutas no encontradas
+// Ruta no encontrada
 app.use((req, res) => {
   res.status(404).send("Endpoint no encontrado");
 });
