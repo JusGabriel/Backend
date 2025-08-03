@@ -9,6 +9,7 @@ import routerClientes from './routers/cliente_routes.js';
 import routerEmprendedores from './routers/emprendedor_routes.js';
 import authRoutes from './routers/auth.js';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose'; // 🔧 necesario para el endpoint nuevo
 import Cliente from './models/Cliente.js';
 import Emprendedor from './models/Emprendedor.js';
 
@@ -132,6 +133,16 @@ app.use('/auth', authRoutes);
 app.use('/api/administradores', adminRoutes);
 app.use('/api/clientes', routerClientes);
 app.use('/api/emprendedores', routerEmprendedores);
+
+// ✅ Ruta temporal para eliminar el índice conflictivo
+app.get('/admin/delete-idGoogle-index', async (req, res) => {
+  try {
+    const result = await mongoose.connection.db.collection('emprendedors').dropIndex('idGoogle_1');
+    res.send('✅ Índice idGoogle_1 eliminado correctamente: ' + JSON.stringify(result));
+  } catch (error) {
+    res.status(500).send('❌ Error al eliminar índice: ' + error.message);
+  }
+});
 
 // Ruta para estado de sesión
 app.get('/api/status', (req, res) => {
