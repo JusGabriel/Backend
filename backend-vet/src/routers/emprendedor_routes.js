@@ -3,9 +3,12 @@ import {
   registro,
   confirmarMail,
   recuperarPassword,
-  cambiarPassword,
+  comprobarTokenPasword,
+  crearNuevoPassword,
   login,
   perfil,
+  actualizarPassword,
+  actualizarPerfil,
   verEmprendedores,
   actualizarEmprendedor,
   eliminarEmprendedor
@@ -20,17 +23,20 @@ router.get("/confirmar/:token", confirmarMail)
 
 // Recuperación de contraseña
 router.post("/recuperarpassword", recuperarPassword)
-router.post("/cambiarpassword/:token", cambiarPassword)
+router.get("/recuperarpassword/:token", comprobarTokenPasword)
+router.post("/nuevopassword/:token", crearNuevoPassword)
 
 // Login
 router.post('/login', login)
 
-// Rutas protegidas con JWT
-router.get('/perfil', verificarTokenJWT, perfil) // Obtener perfil autenticado
-router.put('/actualizar/:id', verificarTokenJWT, actualizarEmprendedor) // Actualizar datos
-router.delete('/eliminar/:id', verificarTokenJWT, eliminarEmprendedor) // Eliminar cuenta
+// Perfil autenticado y acciones protegidas
+router.get('/perfil', verificarTokenJWT, perfil)
+router.put('/emprendedor/:id', verificarTokenJWT, actualizarPerfil)
+router.put('/emprendedor/actualizarpassword/:id', verificarTokenJWT, actualizarPassword)
 
-// Ruta pública para ver todos los emprendedores (solo si es necesario)
+// CRUD emprendedores (solo para admins o uso general)
 router.get("/todos", verEmprendedores)
+router.put('/actualizar/:id', verificarTokenJWT, actualizarEmprendedor)
+router.delete('/eliminar/:id', verificarTokenJWT, eliminarEmprendedor)
 
 export default router
