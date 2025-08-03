@@ -26,10 +26,8 @@ const emprendedorSchema = new Schema({
     }
     },
     idGoogle: {
-    type: String,
-    unique: true,
-    sparse: true,
-    default: null
+      type: String,
+      default: null
     },
   descripcion: {
     type: String,
