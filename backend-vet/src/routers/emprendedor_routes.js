@@ -4,32 +4,33 @@ import {
   confirmarMail,
   recuperarPassword,
   cambiarPassword,
+  login,
+  perfil,
   verEmprendedores,
   actualizarEmprendedor,
   eliminarEmprendedor
 } from "../controllers/emprendedor_controllers.js"
+import { verificarTokenJWT } from '../middleware/JWT.js'
 
 const router = Router()
 
-// Crear emprendedor
+// Registro y confirmación de cuenta
 router.post("/registro", registro)
-
-// Confirmar cuenta con token
 router.get("/confirmar/:token", confirmarMail)
 
-// Recuperar contraseña (envía token por email)
+// Recuperación de contraseña
 router.post("/recuperarpassword", recuperarPassword)
-
-// Cambiar contraseña usando el token
 router.post("/cambiarpassword/:token", cambiarPassword)
 
-// Ver todos los emprendedores
+// Login
+router.post('/login', login)
+
+// Rutas protegidas con JWT
+router.get('/perfil', verificarTokenJWT, perfil) // Obtener perfil autenticado
+router.put('/actualizar/:id', verificarTokenJWT, actualizarEmprendedor) // Actualizar datos
+router.delete('/eliminar/:id', verificarTokenJWT, eliminarEmprendedor) // Eliminar cuenta
+
+// Ruta pública para ver todos los emprendedores (solo si es necesario)
 router.get("/todos", verEmprendedores)
-
-// Actualizar emprendedor por ID
-router.put("/actualizar/:id", actualizarEmprendedor)
-
-// Eliminar emprendedor por ID
-router.delete("/eliminar/:id", eliminarEmprendedor)
 
 export default router
