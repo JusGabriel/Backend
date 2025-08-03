@@ -1,5 +1,7 @@
 import jwt from "jsonwebtoken"
 import Administrador from "../models/Administrador.js"
+import Emprendedor from "../models/Emprendedor.js"
+import Cliente from "../models/Cliente.js"
 
 const crearTokenJWT = (id, rol) => {
     return jwt.sign({ id, rol }, process.env.JWT_SECRET, { expiresIn: "1d" })
@@ -18,22 +20,30 @@ const verificarTokenJWT = async (req, res, next) => {
 
         if (rol === "Administrador") {
             req.adminBDD = await Administrador.findById(id).lean().select("-password")
-            
             if (!req.adminBDD) {
                 return res.status(404).json({ msg: "Administrador no encontrado" })
             }
-            
-            return next()
+        } else if (rol === "Emprendedor") {
+            req.emprendedorBDD = await Emprendedor.findById(id).lean().select("-password")
+            if (!req.emprendedorBDD) {
+                return res.status(404).json({ msg: "Emprendedor no encontrado" })
+            }
+        } else if (rol === "Cliente") {
+            req.clienteBDD = await Cliente.findById(id).lean().select("-password")
+            if (!req.clienteBDD) {
+                return res.status(404).json({ msg: "Cliente no encontrado" })
+            }
         } else {
-            return res.status(403).json({ msg: "Acceso denegado: rol no autorizado" })
+            return res.status(403).json({ msg: "Rol no autorizado" })
         }
+
+        next()
     } catch (error) {
         return res.status(401).json({ msg: "Token inválido o expirado" })
     }
 }
 
-
-export { 
+export {
     crearTokenJWT,
-    verificarTokenJWT 
+    verificarTokenJWT
 }
