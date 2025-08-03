@@ -6,7 +6,6 @@ import {
 import { crearTokenJWT } from "../middleware/JWT.js"
 import mongoose from "mongoose"
 
-// Registro de emprendedor con envío de correo
 const registro = async (req, res) => {
   const { email, password } = req.body
 
@@ -14,8 +13,8 @@ const registro = async (req, res) => {
     return res.status(400).json({ msg: "Todos los campos son obligatorios" })
   }
 
-  const existe = await Emprendedor.findOne({ email })
-  if (existe) {
+  const existeEmail = await Emprendedor.findOne({ email })
+  if (existeEmail) {
     return res.status(400).json({ msg: "Este email ya está registrado" })
   }
 
@@ -29,7 +28,6 @@ const registro = async (req, res) => {
   res.status(200).json({ msg: "Revisa tu correo electrónico para confirmar tu cuenta" })
 }
 
-// Confirmación del email de emprendedor
 const confirmarMail = async (req, res) => {
   const { token } = req.params
   const emprendedorBDD = await Emprendedor.findOne({ token })
@@ -43,12 +41,11 @@ const confirmarMail = async (req, res) => {
   res.status(200).json({ msg: "Cuenta confirmada correctamente" })
 }
 
-// Recuperar contraseña (envía email con token)
 const recuperarPassword = async (req, res) => {
   const { email } = req.body
 
   if (Object.values(req.body).includes("")) {
-    return res.status(400).json({ msg: "El email es obligatorio" })
+    return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
   }
 
   const emprendedor = await Emprendedor.findOne({ email })
@@ -58,43 +55,56 @@ const recuperarPassword = async (req, res) => {
 
   const token = emprendedor.crearToken()
   emprendedor.token = token
+  await sendMailToRecoveryPasswordEmprendedor(email, token)
   await emprendedor.save()
 
-  await sendMailToRecoveryPasswordEmprendedor(email, token)
-
-  res.status(200).json({ msg: "Hemos enviado un correo para recuperar tu contraseña" })
+  res.status(200).json({ msg: "Revisa tu correo electrónico para reestablecer tu cuenta" })
 }
 
-// Cambiar contraseña con token
-const cambiarPassword = async (req, res) => {
+const comprobarTokenPasword = async (req, res) => {
   const { token } = req.params
-  const { password } = req.body
-
-  if (Object.values(req.body).includes("")) {
-    return res.status(400).json({ msg: "El password es obligatorio" })
-  }
-
   const emprendedor = await Emprendedor.findOne({ token })
-  if (!emprendedor) {
+
+  if (emprendedor?.token !== token) {
     return res.status(404).json({ msg: "Token no válido" })
   }
 
-  emprendedor.password = await emprendedor.encrypPassword(password)
-  emprendedor.token = null
-
-  await emprendedor.save()
-  res.status(200).json({ msg: "Contraseña actualizada correctamente" })
+  res.status(200).json({ msg: "Token confirmado, ya puedes crear tu nuevo password" })
 }
 
-// Login de emprendedor con JWT
+const crearNuevoPassword = async (req, res) => {
+  const { password, confirmpassword } = req.body
+
+  if (Object.values(req.body).includes("")) {
+    return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
+  }
+
+  if (password !== confirmpassword) {
+    return res.status(404).json({ msg: "Lo sentimos, los passwords no coinciden" })
+  }
+
+  const emprendedor = await Emprendedor.findOne({ token: req.params.token })
+
+  if (emprendedor?.token !== req.params.token) {
+    return res.status(404).json({ msg: "Token no válido" })
+  }
+
+  emprendedor.token = null
+  emprendedor.password = await emprendedor.encrypPassword(password)
+  await emprendedor.save()
+
+  res.status(200).json({ msg: "Felicitaciones, ya puedes iniciar sesión con tu nuevo password" })
+}
+
 const login = async (req, res) => {
   const { email, password } = req.body
 
   if (Object.values(req.body).includes("")) {
-    return res.status(400).json({ msg: "Todos los campos son obligatorios" })
+    return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
   }
 
   const emprendedorBDD = await Emprendedor.findOne({ email }).select("-__v -token -createdAt -updatedAt")
+
   if (!emprendedorBDD) {
     return res.status(404).json({ msg: "El usuario no está registrado" })
   }
@@ -122,13 +132,67 @@ const login = async (req, res) => {
   })
 }
 
-// Obtener el perfil del emprendedor autenticado
 const perfil = (req, res) => {
   const { token, password, confirmEmail, __v, createdAt, updatedAt, ...datosPerfil } = req.emprendedorBDD
   res.status(200).json(datosPerfil)
 }
 
-// Obtener todos los emprendedores
+const actualizarPassword = async (req, res) => {
+  try {
+    const emprendedorBDD = await Emprendedor.findById(req.emprendedorBDD._id)
+
+    if (!emprendedorBDD) {
+      return res.status(404).json({ msg: "Emprendedor no encontrado" })
+    }
+
+    const verificarPassword = await emprendedorBDD.matchPassword(req.body.passwordactual)
+
+    if (!verificarPassword) {
+      return res.status(400).json({ msg: "El password actual no es correcto" })
+    }
+
+    emprendedorBDD.password = await emprendedorBDD.encrypPassword(req.body.passwordnuevo)
+    await emprendedorBDD.save()
+
+    res.status(200).json({ msg: "Password actualizado correctamente" })
+  } catch (error) {
+    res.status(500).json({ msg: "Error al actualizar el password" })
+  }
+}
+
+const actualizarPerfil = async (req, res) => {
+  const { id } = req.params
+  const { nombre, apellido, telefono, email } = req.body
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: "ID no válido" })
+  }
+
+  if (Object.values(req.body).includes("")) {
+    return res.status(400).json({ msg: "Todos los campos son obligatorios" })
+  }
+
+  const emprendedorBDD = await Emprendedor.findById(id)
+  if (!emprendedorBDD) {
+    return res.status(404).json({ msg: "Emprendedor no encontrado" })
+  }
+
+  if (emprendedorBDD.email !== email) {
+    const emprendedorMail = await Emprendedor.findOne({ email })
+    if (emprendedorMail) {
+      return res.status(400).json({ msg: "El email ya se encuentra registrado" })
+    }
+  }
+
+  emprendedorBDD.nombre = nombre ?? emprendedorBDD.nombre
+  emprendedorBDD.apellido = apellido ?? emprendedorBDD.apellido
+  emprendedorBDD.telefono = telefono ?? emprendedorBDD.telefono
+  emprendedorBDD.email = email ?? emprendedorBDD.email
+
+  await emprendedorBDD.save()
+  res.status(200).json(emprendedorBDD)
+}
+
 const verEmprendedores = async (req, res) => {
   try {
     const emprendedores = await Emprendedor.find()
@@ -138,7 +202,6 @@ const verEmprendedores = async (req, res) => {
   }
 }
 
-// Actualizar un emprendedor por ID
 const actualizarEmprendedor = async (req, res) => {
   const { id } = req.params
 
@@ -165,7 +228,6 @@ const actualizarEmprendedor = async (req, res) => {
   }
 }
 
-// Eliminar un emprendedor por ID
 const eliminarEmprendedor = async (req, res) => {
   const { id } = req.params
 
@@ -184,9 +246,12 @@ export {
   registro,
   confirmarMail,
   recuperarPassword,
-  cambiarPassword,
+  comprobarTokenPasword,
+  crearNuevoPassword,
   login,
   perfil,
+  actualizarPassword,
+  actualizarPerfil,
   verEmprendedores,
   actualizarEmprendedor,
   eliminarEmprendedor
