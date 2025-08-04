@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose'; // 🔧 necesario para el endpoint nuevo
 import Cliente from './models/Cliente.js';
 import Emprendedor from './models/Emprendedor.js';
-
+import chatRoutes from './routers/chatRoutes.js'
 dotenv.config();
 
 const app = express();
@@ -133,7 +133,7 @@ app.use('/auth', authRoutes);
 app.use('/api/administradores', adminRoutes);
 app.use('/api/clientes', routerClientes);
 app.use('/api/emprendedores', routerEmprendedores);
-
+app.use('/api/chat', chatRoutes)
 // ✅ Ruta temporal para eliminar el índice conflictivo
 app.get('/admin/delete-idGoogle-index', async (req, res) => {
   try {
