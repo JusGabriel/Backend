@@ -28,19 +28,14 @@ export const crearProducto = async (req, res) => {
 
 // Obtener todos los productos de un emprendedor
 export const obtenerProductosPorEmprendedor = async (req, res) => {
-  const emprendedorId = req.emprendedorBDD?._id;
-
-  if (!emprendedorId) {
-    return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
-  }
-
   try {
-    const productos = await Producto.find({ emprendedor: emprendedorId }).populate('categoria');
+    const productos = await Producto.find().populate('categoria');
     res.json(productos);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
+
 
 // Obtener producto por ID
 export const obtenerProducto = async (req, res) => {
@@ -110,3 +105,4 @@ export const eliminarProducto = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al eliminar producto', error: error.message });
   }
 };
+
