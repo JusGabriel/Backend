@@ -3,7 +3,11 @@ import Producto from '../models/Productos.js';
 // Crear producto
 export const crearProducto = async (req, res) => {
   const { nombre, descripcion, precio, imagen, categoria, stock } = req.body;
-  const emprendedorId = req.usuario._id; // asumimos que viene desde el JWT
+
+  const emprendedorId = req.emprendedorBDD?._id;
+  if (!emprendedorId) {
+    return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
+  }
 
   try {
     const nuevoProducto = await Producto.create({
@@ -24,7 +28,11 @@ export const crearProducto = async (req, res) => {
 
 // Obtener todos los productos de un emprendedor
 export const obtenerProductosPorEmprendedor = async (req, res) => {
-  const emprendedorId = req.params.emprendedorId;
+  const emprendedorId = req.emprendedorBDD?._id;
+
+  if (!emprendedorId) {
+    return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
+  }
 
   try {
     const productos = await Producto.find({ emprendedor: emprendedorId }).populate('categoria');
@@ -52,7 +60,11 @@ export const obtenerProducto = async (req, res) => {
 // Actualizar producto
 export const actualizarProducto = async (req, res) => {
   const productoId = req.params.id;
-  const emprendedorId = req.usuario._id;
+  const emprendedorId = req.emprendedorBDD?._id;
+
+  if (!emprendedorId) {
+    return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
+  }
 
   try {
     const producto = await Producto.findById(productoId);
@@ -75,7 +87,11 @@ export const actualizarProducto = async (req, res) => {
 // Eliminar producto
 export const eliminarProducto = async (req, res) => {
   const productoId = req.params.id;
-  const emprendedorId = req.usuario._id;
+  const emprendedorId = req.emprendedorBDD?._id;
+
+  if (!emprendedorId) {
+    return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
+  }
 
   try {
     const producto = await Producto.findById(productoId);
