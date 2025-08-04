@@ -29,7 +29,7 @@ export const crearProducto = async (req, res) => {
 // Obtener todos los productos de un emprendedor
 export const obtenerProductosPorEmprendedor = async (req, res) => {
   try {
-    const productos = await Producto.find().populate('categoria');
+    const productos = await Producto.find(); // sin populate
     res.json(productos);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
@@ -105,4 +105,5 @@ export const eliminarProducto = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al eliminar producto', error: error.message });
   }
 };
+
 
