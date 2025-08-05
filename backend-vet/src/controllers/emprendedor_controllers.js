@@ -4,6 +4,8 @@ import {
   sendMailToRecoveryPasswordEmprendedor
 } from "../config/nodemailerEmprendedor.js"
 import { crearTokenJWT } from "../middleware/JWT.js"
+import Emprendimiento from '../models/Emprendimiento.js'
+
 import mongoose from "mongoose"
 
 const registro = async (req, res) => {
@@ -241,7 +243,63 @@ const eliminarEmprendedor = async (req, res) => {
     res.status(500).json({ msg: "Error al eliminar emprendedor" })
   }
 }
+// Agregar emprendimiento a favoritos
+export const agregarAFavoritos = async (req, res) => {
+  const emprendedorId = req.emprendedorBDD?._id
+  const { emprendimientoId } = req.body
 
+  try {
+    const emprendimiento = await Emprendimiento.findById(emprendimientoId)
+    if (!emprendimiento) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' })
+
+    const emprendedor = await Emprendedor.findById(emprendedorId)
+    if (emprendedor.favoritos.includes(emprendimientoId)) {
+      return res.status(400).json({ mensaje: 'Ya está en favoritos' })
+    }
+
+    emprendedor.favoritos.push(emprendimientoId)
+    await emprendedor.save()
+
+    res.json({ mensaje: 'Agregado a favoritos correctamente' })
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al agregar favorito', error: error.message })
+  }
+}
+
+// Eliminar emprendimiento de favoritos
+export const eliminarDeFavoritos = async (req, res) => {
+  const emprendedorId = req.emprendedorBDD?._id
+  const { emprendimientoId } = req.params
+
+  try {
+    const emprendedor = await Emprendedor.findById(emprendedorId)
+    emprendedor.favoritos = emprendedor.favoritos.filter(id => id.toString() !== emprendimientoId)
+    await emprendedor.save()
+
+    res.json({ mensaje: 'Eliminado de favoritos correctamente' })
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al eliminar favorito', error: error.message })
+  }
+}
+
+// Obtener favoritos del emprendedor
+export const obtenerFavoritos = async (req, res) => {
+  const emprendedorId = req.emprendedorBDD?._id
+
+  try {
+    const emprendedor = await Emprendedor.findById(emprendedorId).populate({
+      path: 'favoritos',
+      populate: {
+        path: 'emprendedor',
+        select: 'nombre apellido'
+      }
+    })
+
+    res.json(emprendedor.favoritos)
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener favoritos', error: error.message })
+  }
+}
 export {
   registro,
   confirmarMail,
