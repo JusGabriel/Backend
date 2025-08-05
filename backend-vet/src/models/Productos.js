@@ -18,10 +18,10 @@ const productoSchema = new Schema({
         type: String,
         trim: true
     },
-    emprendedor: {
-        type: Schema.Types.ObjectId,
-        ref: 'Emprendedor',
-        required: true
+    emprendimiento: {
+    type: Schema.Types.ObjectId,
+    ref: 'Emprendimiento',
+    required: true
     },
     categoria: {
         type: Schema.Types.ObjectId,
