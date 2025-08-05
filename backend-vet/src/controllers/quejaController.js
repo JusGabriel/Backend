@@ -111,3 +111,26 @@ export const obtenerTodasLasQuejas = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener todas las quejas', error: error.message })
   }
 }
+// Obtener todas las quejas con sus mensajes incluidos
+export const obtenerTodasLasQuejasConMensajes = async (req, res) => {
+  try {
+    const quejas = await Queja.find()
+      .sort({ ultimaActualizacion: -1 })
+      .populate('participantes.id')
+
+    // Para cada queja, buscar los mensajes
+    const quejasConMensajes = await Promise.all(
+      quejas.map(async (queja) => {
+        const mensajes = await MensajeQueja.find({ queja: queja._id }).sort({ timestamp: 1 })
+        return {
+          ...queja.toObject(),
+          mensajes
+        }
+      })
+    )
+
+    res.json(quejasConMensajes)
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener todas las quejas con mensajes', error: error.message })
+  }
+}
