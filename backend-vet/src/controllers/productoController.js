@@ -108,9 +108,13 @@ export const eliminarProducto = async (req, res) => {
 // Obtener todos los productos (públicos)
 export const obtenerTodosLosProductos = async (req, res) => {
   try {
-    const productos = await Producto.find().populate('categoria').populate('emprendedor', 'nombre apellido');
+    const productos = await Producto.find()
+      .populate('categoria')
+      .populate('emprendimiento', 'nombre descripcion'); 
+
     res.json(productos);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
+
