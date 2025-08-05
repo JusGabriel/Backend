@@ -1,4 +1,5 @@
 import Emprendimiento from '../models/Emprendimiento.js'
+import Categoria from '../models/Categoria.js'
 
 // Crear emprendimiento
 export const crearEmprendimiento = async (req, res) => {
@@ -136,3 +137,4 @@ export const obtenerEmprendimientosPublicos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener emprendimientos públicos', error: error.message })
   }
 }
+
