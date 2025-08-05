@@ -34,7 +34,7 @@ const clienteSchema = new Schema({
   // Dentro de clienteSchema
 favoritos: [{
     type: Schema.Types.ObjectId,
-    ref: 'Emprendedor'
+    ref: 'Emprendimiento'
 }],
 
   telefono: {
