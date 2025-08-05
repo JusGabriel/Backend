@@ -34,6 +34,10 @@ const emprendedorSchema = new Schema({
     trim: true,
     default: ''
   },
+  favoritos: [{
+  type: Schema.Types.ObjectId,
+  ref: 'Emprendimiento'
+}],
   enlaces: {
     facebook: { type: String, default: null },
     instagram: { type: String, default: null },
@@ -48,6 +52,7 @@ const emprendedorSchema = new Schema({
         type:String,
         default:"Emprendedor"
     },
+  
   token: {
     type: String,
     default: null
@@ -89,4 +94,3 @@ emprendedorSchema.methods.crearToken = function () {
 }
 
 export default model('Emprendedor', emprendedorSchema)
-
