@@ -3,7 +3,7 @@ import {
   agregarAFavoritos,
   eliminarDeFavoritos,
   obtenerFavoritos
-} from '../controllers/clienteController.js'
+} from '../controllers/cliente_controllers.js'
 
 import { verificarTokenJWT } from '../middleware/JWT.js'
 
