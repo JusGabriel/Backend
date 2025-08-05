@@ -1,4 +1,6 @@
 import Cliente from '../models/Cliente.js';
+import Emprendimiento from '../models/Emprendimiento.js'
+
 import mongoose from 'mongoose';
 import {
   sendMailToRegisterCliente,
@@ -194,7 +196,69 @@ const actualizarPerfil = async (req, res) => {
   await clienteBDD.save();
   res.status(200).json(clienteBDD);
 };
+// Agregar emprendimiento a favoritos
+export const agregarAFavoritos = async (req, res) => {
+  const clienteId = req.clienteBDD?._id
+  const { emprendimientoId } = req.body
 
+  try {
+    const cliente = await Cliente.findById(clienteId)
+    const emprendimiento = await Emprendimiento.findById(emprendimientoId)
+
+    if (!emprendimiento) {
+      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' })
+    }
+
+    // Verificar si ya está en favoritos
+    if (cliente.favoritos.includes(emprendimientoId)) {
+      return res.status(400).json({ mensaje: 'Ya está en favoritos' })
+    }
+
+    cliente.favoritos.push(emprendimientoId)
+    await cliente.save()
+
+    res.json({ mensaje: 'Agregado a favoritos correctamente' })
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al agregar a favoritos', error: error.message })
+  }
+}
+
+// Eliminar emprendimiento de favoritos
+export const eliminarDeFavoritos = async (req, res) => {
+  const clienteId = req.clienteBDD?._id
+  const { emprendimientoId } = req.params
+
+  try {
+    const cliente = await Cliente.findById(clienteId)
+
+    cliente.favoritos = cliente.favoritos.filter(id => id.toString() !== emprendimientoId)
+    await cliente.save()
+
+    res.json({ mensaje: 'Eliminado de favoritos correctamente' })
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al eliminar de favoritos', error: error.message })
+  }
+}
+
+// Obtener lista de favoritos
+export const obtenerFavoritos = async (req, res) => {
+  const clienteId = req.clienteBDD?._id
+
+  try {
+    const cliente = await Cliente.findById(clienteId)
+      .populate({
+        path: 'favoritos',
+        populate: {
+          path: 'emprendedor',
+          select: 'nombre apellido'
+        }
+      })
+
+    res.json(cliente.favoritos)
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener favoritos', error: error.message })
+  }
+}
 export {
   registro,
   confirmarMail,
