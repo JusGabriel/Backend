@@ -4,11 +4,12 @@ import {
   enviarQueja,
   obtenerMensajesQueja,
   obtenerQuejasPorUsuario,
-  obtenerTodasLasQuejas  // <--- importamos nuevo método
+  obtenerTodasLasQuejas, 
+  obtenerTodasLasQuejasConMensajes
 } from '../controllers/quejaController.js'
 
 const router = Router()
-
+router.get('/todas-con-mensajes', obtenerTodasLasQuejasConMensajes)
 // Enviar queja (crea conversación si no existe)
 router.post('/queja', enviarQueja)
 
@@ -20,3 +21,4 @@ router.get('/quejas/:usuarioId/:rol', obtenerQuejasPorUsuario)
 // Ruta para obtener todas las quejas (solo admin)
 router.get('/todas', obtenerTodasLasQuejas)
 export default router
+
