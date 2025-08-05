@@ -17,6 +17,7 @@ import productoRoutes from './routers/productoRoutes.js';
 import quejaRoutes from './routers/quejaRoutes.js'
 import emprendimientoRoutes from './routers/emprendimientoRoutes.js'
 import favoritoRoutes from './routers/favoritoRoutes.js'
+import favoritosEmprendedorRoutes from './routers/favoritosEmprendedorRoutes.js'
 
 dotenv.config();
 
@@ -143,6 +144,7 @@ app.use('/api/productos', productoRoutes);
 app.use('/api/quejas', quejaRoutes)
 app.use('/api/emprendimientos', emprendimientoRoutes)
 app.use('/api/favoritos', favoritoRoutes)
+app.use('/api/emprendedor/favoritos', favoritosEmprendedorRoutes)
 
 // ✅ Ruta temporal para eliminar el índice conflictivo
 app.get('/admin/delete-idGoogle-index', async (req, res) => {
