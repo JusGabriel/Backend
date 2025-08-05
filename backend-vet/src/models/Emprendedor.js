@@ -48,10 +48,6 @@ const emprendedorSchema = new Schema({
         type:String,
         default:"Emprendedor"
     },
-  categorias: [{
-    type: Schema.Types.ObjectId,
-    ref: 'Categoria'
-  }],
   token: {
     type: String,
     default: null
@@ -93,3 +89,4 @@ emprendedorSchema.methods.crearToken = function () {
 }
 
 export default model('Emprendedor', emprendedorSchema)
+
