@@ -17,7 +17,7 @@ export const crearProducto = async (req, res) => {
       imagen,
       categoria,
       stock,
-      emprendedor: emprendedorId
+      emprendimiento: emprendedorId  // Aquí debe ir 'emprendimiento' no 'emprendedor'
     });
 
     res.status(201).json({ mensaje: 'Producto creado', producto: nuevoProducto });
@@ -28,19 +28,29 @@ export const crearProducto = async (req, res) => {
 
 // Obtener todos los productos de un emprendedor
 export const obtenerProductosPorEmprendedor = async (req, res) => {
+  const { emprendedorId } = req.params;
+
   try {
-    const productos = await Producto.find().populate('categoria');
+    const productos = await Producto.find({ emprendimiento: emprendedorId }).populate('categoria');
     res.json(productos);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
 
-
 // Obtener producto por ID
 export const obtenerProducto = async (req, res) => {
   try {
-    const producto = await Producto.findById(req.params.id).populate('categoria');
+    const producto = await Producto.findById(req.params.id)
+      .populate('categoria')
+      .populate({
+        path: 'emprendimiento',
+        select: 'nombreComercial descripcion emprendedor',
+        populate: {
+          path: 'emprendedor',
+          select: 'nombre apellido'
+        }
+      });
 
     if (!producto) {
       return res.status(404).json({ mensaje: 'Producto no encontrado' });
@@ -68,11 +78,17 @@ export const actualizarProducto = async (req, res) => {
       return res.status(404).json({ mensaje: 'Producto no encontrado' });
     }
 
-    if (producto.emprendedor.toString() !== emprendedorId.toString()) {
+    if (producto.emprendimiento.toString() !== emprendedorId.toString()) {
       return res.status(403).json({ mensaje: 'No tienes permiso para editar este producto' });
     }
 
-    const actualizado = await Producto.findByIdAndUpdate(productoId, req.body, { new: true });
+    // Actualizar solo campos permitidos
+    const camposActualizar = {};
+    ['nombre', 'descripcion', 'precio', 'imagen', 'categoria', 'stock', 'estado'].forEach(campo => {
+      if (req.body[campo] !== undefined) camposActualizar[campo] = req.body[campo];
+    });
+
+    const actualizado = await Producto.findByIdAndUpdate(productoId, camposActualizar, { new: true });
     res.json({ mensaje: 'Producto actualizado', producto: actualizado });
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al actualizar producto', error: error.message });
@@ -95,7 +111,7 @@ export const eliminarProducto = async (req, res) => {
       return res.status(404).json({ mensaje: 'Producto no encontrado' });
     }
 
-    if (producto.emprendedor.toString() !== emprendedorId.toString()) {
+    if (producto.emprendimiento.toString() !== emprendedorId.toString()) {
       return res.status(403).json({ mensaje: 'No tienes permiso para eliminar este producto' });
     }
 
@@ -105,8 +121,8 @@ export const eliminarProducto = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al eliminar producto', error: error.message });
   }
 };
+
 // Obtener todos los productos (públicos)
-// Obtener todos los productos (públicos) con nombre de emprendimiento y datos del emprendedor
 export const obtenerTodosLosProductos = async (req, res) => {
   try {
     const productos = await Producto.find()
@@ -125,5 +141,3 @@ export const obtenerTodosLosProductos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
-
-
