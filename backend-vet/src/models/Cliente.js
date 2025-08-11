@@ -26,10 +26,8 @@ const clienteSchema = new Schema({
     }
     },
     idGoogle: {
-    type: String,
-    unique: true,
-    sparse: true,
-    default: null
+      type: String,
+      default: null
     },
   // Dentro de clienteSchema
 favoritos: [{
@@ -83,3 +81,4 @@ clienteSchema.methods.crearToken = function () {
 }
 
 export default model('Cliente', clienteSchema)
+
