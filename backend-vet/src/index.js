@@ -1,6 +1,8 @@
 // index.js
 import dotenv from 'dotenv';
 import app from './server.js';
+import '../test-env.js'
+
 import { connectDB } from './database.js';
 
 dotenv.config();
@@ -15,3 +17,4 @@ const startServer = async () => {
 };
 
 startServer();
+
