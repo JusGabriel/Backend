@@ -21,8 +21,8 @@ router.get('/google/cliente/callback',
       { expiresIn: '1d' }
     );
 
-    // ✅ Redirige al frontend a /login con token y rol
-    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}`);
+    // ✅ Redirige al frontend a /login con token, rol e id
+    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id}`);
   }
 );
 
@@ -43,8 +43,8 @@ router.get('/google/emprendedor/callback',
       { expiresIn: '1d' }
     );
 
-    // ✅ Redirige al frontend a /login con token y rol
-    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}`);
+    // ✅ Redirige al frontend a /login con token, rol e id
+    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id}`);
   }
 );
 
