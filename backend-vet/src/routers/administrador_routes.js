@@ -28,7 +28,8 @@ router.delete("/eliminar/:id", eliminarAdministrador);
 router.post('/login',login)
 router.get('/perfil',verificarTokenJWT,perfil)
 router.put('/administradore/:id',verificarTokenJWT,actualizarPerfil)
-router.put('/admin/actualizarpassword/:id',verificarTokenJWT,actualizarPassword)
+router.put('/administradore/actualizarpassword/:id',verificarTokenJWT,actualizarPassword)
 
 
 export default router
+
