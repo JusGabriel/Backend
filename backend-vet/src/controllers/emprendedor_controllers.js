@@ -8,11 +8,41 @@ import Emprendimiento from '../models/Emprendimiento.js'
 
 import mongoose from "mongoose"
 
+// Funciones internas de validación
+function validarNombre(nombre) {
+  if (!nombre || typeof nombre !== 'string' || !/^[a-zA-Z\s]+$/.test(nombre.trim())) {
+    return 'El nombre es obligatorio y solo puede contener letras y espacios';
+  }
+  return null;
+}
+
+function validarCelular(celular) {
+  if (!celular || (typeof celular !== 'string' && typeof celular !== 'number')) {
+    return 'El celular es obligatorio y debe ser un número';
+  }
+  const celularStr = celular.toString();
+  if (!/^\d{7,15}$/.test(celularStr)) {
+    return 'El celular debe contener solo números y tener entre 7 y 15 dígitos';
+  }
+  return null;
+}
+
 const registro = async (req, res) => {
-  const { email, password } = req.body
+  const { nombre, telefono, email, password } = req.body
 
   if (Object.values(req.body).includes("")) {
     return res.status(400).json({ msg: "Todos los campos son obligatorios" })
+  }
+
+  // Validaciones
+  const errorNombre = validarNombre(nombre);
+  if (errorNombre) {
+    return res.status(400).json({ msg: errorNombre });
+  }
+
+  const errorTelefono = validarCelular(telefono);
+  if (errorTelefono) {
+    return res.status(400).json({ msg: errorTelefono });
   }
 
   const existeEmail = await Emprendedor.findOne({ email })
@@ -174,6 +204,17 @@ const actualizarPerfil = async (req, res) => {
     return res.status(400).json({ msg: "Todos los campos son obligatorios" })
   }
 
+  // Validaciones
+  const errorNombre = validarNombre(nombre);
+  if (errorNombre) {
+    return res.status(400).json({ msg: errorNombre });
+  }
+
+  const errorTelefono = validarCelular(telefono);
+  if (errorTelefono) {
+    return res.status(400).json({ msg: errorTelefono });
+  }
+
   const emprendedorBDD = await Emprendedor.findById(id)
   if (!emprendedorBDD) {
     return res.status(404).json({ msg: "Emprendedor no encontrado" })
@@ -243,6 +284,7 @@ const eliminarEmprendedor = async (req, res) => {
     res.status(500).json({ msg: "Error al eliminar emprendedor" })
   }
 }
+
 // Agregar emprendimiento a favoritos
 export const agregarAFavoritos = async (req, res) => {
   const emprendedorId = req.emprendedorBDD?._id
@@ -300,6 +342,7 @@ export const obtenerFavoritos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener favoritos', error: error.message })
   }
 }
+
 export {
   registro,
   confirmarMail,
