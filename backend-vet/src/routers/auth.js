@@ -22,7 +22,7 @@ router.get('/google/cliente/callback',
     );
 
     // ✅ Redirige al frontend a /login con token, rol e id
-    res.redirect(${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id});
+res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id}`);
   }
 );
 
@@ -57,3 +57,4 @@ router.get('/logout', (req, res, next) => {
 });
 
 export default router;
+
