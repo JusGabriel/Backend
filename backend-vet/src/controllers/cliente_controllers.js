@@ -8,11 +8,42 @@ import {
 } from '../config/nodemailerCliente.js';
 import { crearTokenJWT } from '../middleware/JWT.js';
 
+// Funciones internas para validación
+function validarNombre(nombre) {
+  if (!nombre || typeof nombre !== 'string' || !/^[a-zA-Z\s]+$/.test(nombre.trim())) {
+    return 'El nombre es obligatorio y solo puede contener letras y espacios';
+  }
+  return null;
+}
+
+function validarTelefono(telefono) {
+  if (!telefono || (typeof telefono !== 'string' && typeof telefono !== 'number')) {
+    return 'El teléfono es obligatorio y debe ser un número';
+  }
+  const telefonoStr = telefono.toString();
+  if (!/^\d{7,15}$/.test(telefonoStr)) {
+    return 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos';
+  }
+  return null;
+}
+
 const registro = async (req, res) => {
-  const { email, password } = req.body;
+  const { nombre, telefono, email, password } = req.body;
   if (Object.values(req.body).includes('')) {
     return res.status(400).json({ msg: 'Todos los campos son obligatorios' });
   }
+
+  // Validaciones
+  const errorNombre = validarNombre(nombre);
+  if (errorNombre) {
+    return res.status(400).json({ msg: errorNombre });
+  }
+
+  const errorTelefono = validarTelefono(telefono);
+  if (errorTelefono) {
+    return res.status(400).json({ msg: errorTelefono });
+  }
+
   const existe = await Cliente.findOne({ email });
   if (existe) {
     return res.status(400).json({ msg: 'Este email ya está registrado' });
@@ -119,15 +150,34 @@ const verClientes = async (req, res) => {
 
 const actualizarCliente = async (req, res) => {
   const { id } = req.params;
+
   try {
     const cliente = await Cliente.findById(id);
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' });
+
     const { nombre, apellido, email, password, telefono } = req.body;
-    if (nombre) cliente.nombre = nombre;
+
+    // Validaciones solo si se envía nombre o telefono para actualizar
+    if (nombre) {
+      const errorNombre = validarNombre(nombre);
+      if (errorNombre) {
+        return res.status(400).json({ msg: errorNombre });
+      }
+      cliente.nombre = nombre;
+    }
+
+    if (telefono) {
+      const errorTelefono = validarTelefono(telefono);
+      if (errorTelefono) {
+        return res.status(400).json({ msg: errorTelefono });
+      }
+      cliente.telefono = telefono;
+    }
+
     if (apellido) cliente.apellido = apellido;
     if (email) cliente.email = email;
-    if (telefono) cliente.telefono = telefono;
     if (password) cliente.password = await cliente.encrypPassword(password);
+
     const actualizado = await cliente.save();
     res.status(200).json(actualizado);
   } catch (error) {
@@ -179,6 +229,18 @@ const actualizarPerfil = async (req, res) => {
   if (Object.values(req.body).includes('')) {
     return res.status(400).json({ msg: 'Debes llenar todos los campos' });
   }
+
+  // Validaciones
+  const errorNombre = validarNombre(nombre);
+  if (errorNombre) {
+    return res.status(400).json({ msg: errorNombre });
+  }
+
+  const errorTelefono = validarTelefono(telefono);
+  if (errorTelefono) {
+    return res.status(400).json({ msg: errorTelefono });
+  }
+
   const clienteBDD = await Cliente.findById(id);
   if (!clienteBDD) {
     return res.status(404).json({ msg: `No existe el cliente con ID ${id}` });
