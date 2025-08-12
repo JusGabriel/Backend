@@ -1,65 +1,8 @@
 import express from 'express';
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
-import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import Cliente from '../models/Cliente.js';
-import Emprendedor from '../models/Emprendedor.js';
 
 const router = express.Router();
-
-// Estrategia Google Cliente
-passport.use('google-cliente', new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: `${process.env.URL_BACKEND}/auth/google/cliente/callback`
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    const email = profile.emails[0].value;
-    let usuario = await Cliente.findOne({ email });
-
-    if (!usuario) {
-      usuario = new Cliente({
-        nombre: profile.name.givenName || '',
-        apellido: profile.name.familyName || '',
-        email,
-        password: '',   // Sin contraseña, porque es login con Google
-        telefono: '',
-        rol: 'Cliente',
-      });
-      await usuario.save();
-    }
-    done(null, usuario);
-  } catch (error) {
-    done(error, null);
-  }
-}));
-
-// Estrategia Google Emprendedor
-passport.use('google-emprendedor', new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: `${process.env.URL_BACKEND}/auth/google/emprendedor/callback`
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    const email = profile.emails[0].value;
-    let usuario = await Emprendedor.findOne({ email });
-
-    if (!usuario) {
-      usuario = new Emprendedor({
-        nombre: profile.name.givenName || '',
-        apellido: profile.name.familyName || '',
-        email,
-        password: '',
-        telefono: '',
-        rol: 'Emprendedor',
-      });
-      await usuario.save();
-    }
-    done(null, usuario);
-  } catch (error) {
-    done(error, null);
-  }
-}));
 
 // Ruta para iniciar sesión como Cliente
 router.get('/google/cliente', passport.authenticate('google-cliente', {
@@ -78,7 +21,8 @@ router.get('/google/cliente/callback',
       { expiresIn: '1d' }
     );
 
-    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id}`);
+    // ✅ Redirige al frontend a /login con token, rol e id
+    res.redirect(${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id});
   }
 );
 
@@ -99,7 +43,8 @@ router.get('/google/emprendedor/callback',
       { expiresIn: '1d' }
     );
 
-    res.redirect(`${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id}`);
+    // ✅ Redirige al frontend a /login con token, rol e id
+    res.redirect(${process.env.URL_FRONTEND}/login?token=${token}&rol=${req.user.rol}&id=${req.user._id});
   }
 );
 
