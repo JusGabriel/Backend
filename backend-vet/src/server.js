@@ -62,7 +62,7 @@ passport.deserializeUser(async (id, done) => {
 passport.use('google-cliente', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
-  callbackURL: `${process.env.URL_BACKEND}/auth/google/cliente/callback`
+  callbackURL: ${process.env.URL_BACKEND}/auth/google/cliente/callback
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     let user = await Cliente.findOne({ idGoogle: profile.id });
@@ -99,7 +99,7 @@ passport.use('google-cliente', new GoogleStrategy({
 passport.use('google-emprendedor', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
-  callbackURL: `${process.env.URL_BACKEND}/auth/google/emprendedor/callback`
+  callbackURL: ${process.env.URL_BACKEND}/auth/google/emprendedor/callback
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     let user = await Emprendedor.findOne({ idGoogle: profile.id });
