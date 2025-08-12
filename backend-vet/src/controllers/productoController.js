@@ -1,13 +1,55 @@
 import Producto from '../models/Productos.js';
 
+// Funciones de validación interna
+function validarNombre(nombre) {
+  if (!nombre || typeof nombre !== 'string' || nombre.trim().length < 3) {
+    return 'El nombre es obligatorio y debe tener al menos 3 caracteres';
+  }
+  return null;
+}
+
+function validarPrecio(precio) {
+  if (precio === undefined || precio === null || isNaN(precio) || Number(precio) < 0) {
+    return 'El precio es obligatorio y debe ser un número igual o mayor a 0';
+  }
+  return null;
+}
+
+function validarStock(stock) {
+  if (stock === undefined || stock === null || isNaN(stock) || !Number.isInteger(Number(stock)) || Number(stock) < 0) {
+    return 'El stock es obligatorio y debe ser un entero igual o mayor a 0';
+  }
+  return null;
+}
+
+function validarCategoria(categoria) {
+  if (!categoria || typeof categoria !== 'string' || categoria.trim() === '') {
+    return 'La categoría es obligatoria';
+  }
+  return null;
+}
+
 // Crear producto
 export const crearProducto = async (req, res) => {
   const { nombre, descripcion, precio, imagen, categoria, stock } = req.body;
-
   const emprendedorId = req.emprendedorBDD?._id;
+
   if (!emprendedorId) {
     return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
   }
+
+  // Validaciones
+  const errorNombre = validarNombre(nombre);
+  if (errorNombre) return res.status(400).json({ mensaje: errorNombre });
+
+  const errorPrecio = validarPrecio(precio);
+  if (errorPrecio) return res.status(400).json({ mensaje: errorPrecio });
+
+  const errorStock = validarStock(stock);
+  if (errorStock) return res.status(400).json({ mensaje: errorStock });
+
+  const errorCategoria = validarCategoria(categoria);
+  if (errorCategoria) return res.status(400).json({ mensaje: errorCategoria });
 
   try {
     const nuevoProducto = await Producto.create({
@@ -17,7 +59,7 @@ export const crearProducto = async (req, res) => {
       imagen,
       categoria,
       stock,
-      emprendimiento: emprendedorId  // Aquí debe ir 'emprendimiento' no 'emprendedor'
+      emprendimiento: emprendedorId
     });
 
     res.status(201).json({ mensaje: 'Producto creado', producto: nuevoProducto });
@@ -80,6 +122,24 @@ export const actualizarProducto = async (req, res) => {
 
     if (producto.emprendimiento.toString() !== emprendedorId.toString()) {
       return res.status(403).json({ mensaje: 'No tienes permiso para editar este producto' });
+    }
+
+    // Validar campos si vienen en req.body
+    if (req.body.nombre) {
+      const errorNombre = validarNombre(req.body.nombre);
+      if (errorNombre) return res.status(400).json({ mensaje: errorNombre });
+    }
+    if (req.body.precio !== undefined) {
+      const errorPrecio = validarPrecio(req.body.precio);
+      if (errorPrecio) return res.status(400).json({ mensaje: errorPrecio });
+    }
+    if (req.body.stock !== undefined) {
+      const errorStock = validarStock(req.body.stock);
+      if (errorStock) return res.status(400).json({ mensaje: errorStock });
+    }
+    if (req.body.categoria) {
+      const errorCategoria = validarCategoria(req.body.categoria);
+      if (errorCategoria) return res.status(400).json({ mensaje: errorCategoria });
     }
 
     // Actualizar solo campos permitidos
