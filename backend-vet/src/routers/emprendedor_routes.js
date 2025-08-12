@@ -32,7 +32,7 @@ router.post('/login', login)
 // Perfil autenticado y acciones protegidas
 router.get('/perfil', verificarTokenJWT, perfil)
 router.put('/emprendedore/:id', verificarTokenJWT, actualizarPerfil)
-router.put('/emprendedor/actualizarpassword/:id', verificarTokenJWT, actualizarPassword)
+router.put('/emprendedore/actualizarpassword/:id', verificarTokenJWT, actualizarPassword)
 
 // CRUD emprendedores (solo para admins o uso general)
 router.get("/todos", verEmprendedores)
@@ -40,4 +40,5 @@ router.put('/actualizar/:id', verificarTokenJWT, actualizarEmprendedor)
 router.delete('/eliminar/:id', verificarTokenJWT, eliminarEmprendedor)
 
 export default router
+
 
