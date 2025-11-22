@@ -5,18 +5,28 @@ import {
   obtenerEmprendimiento,
   actualizarEmprendimiento,
   eliminarEmprendimiento,
-  obtenerEmprendimientosPublicos
+  obtenerEmprendimientosPublicos,
+  obtenerEmprendimientoPorSlug
 } from '../controllers/emprendimientoController.js'
 
 import { verificarTokenJWT } from '../middleware/JWT.js'
 
 const router = Router()
 
-// Rutas públicas
+// -----------------------------
+// RUTAS PUBLICAS
+// -----------------------------
 router.get('/publicos', obtenerEmprendimientosPublicos)
-router.get('/:id', obtenerEmprendimiento) // Público si está activo, o si es el dueño
 
-// Rutas protegidas
+// RUTA POR SLUG  (DEBE IR ANTES DE /:id)
+router.get('/s/:slug', obtenerEmprendimientoPorSlug)
+
+// RUTA POR ID
+router.get('/:id', obtenerEmprendimiento)
+
+// -----------------------------
+// RUTAS PROTEGIDAS
+// -----------------------------
 router.post('/', verificarTokenJWT, crearEmprendimiento)
 router.get('/', verificarTokenJWT, obtenerMisEmprendimientos)
 router.put('/:id', verificarTokenJWT, actualizarEmprendimiento)
