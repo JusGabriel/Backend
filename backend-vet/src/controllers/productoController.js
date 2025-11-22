@@ -1,6 +1,9 @@
 import Producto from '../models/Productos.js';
 
-// Funciones de validación interna
+// -----------------------------
+// VALIDACIONES
+// -----------------------------
+
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || nombre.trim().length < 3) {
     return 'El nombre es obligatorio y debe tener al menos 3 caracteres';
@@ -29,7 +32,9 @@ function validarCategoria(categoria) {
   return null;
 }
 
-// Crear producto
+// -----------------------------
+// CREAR PRODUCTO
+// -----------------------------
 export const crearProducto = async (req, res) => {
   const { nombre, descripcion, precio, imagen, categoria, stock } = req.body;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -68,26 +73,40 @@ export const crearProducto = async (req, res) => {
   }
 };
 
-// Obtener todos los productos de un emprendedor
+// -----------------------------
+// OBTENER PRODUCTOS POR EMPRENDEDOR
+// -----------------------------
 export const obtenerProductosPorEmprendedor = async (req, res) => {
   const { emprendedorId } = req.params;
 
   try {
-    const productos = await Producto.find({ emprendimiento: emprendedorId }).populate('categoria');
+    const productos = await Producto.find({ emprendimiento: emprendedorId })
+      .populate('categoria')
+      .populate({
+        path: 'emprendimiento',
+        select: 'nombreComercial descripcion logo slug emprendedor',
+        populate: {
+          path: 'emprendedor',
+          select: 'nombre apellido'
+        }
+      });
+
     res.json(productos);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
 
-// Obtener producto por ID
+// -----------------------------
+// OBTENER PRODUCTO POR ID
+// -----------------------------
 export const obtenerProducto = async (req, res) => {
   try {
     const producto = await Producto.findById(req.params.id)
       .populate('categoria')
       .populate({
         path: 'emprendimiento',
-        select: 'nombreComercial descripcion emprendedor',
+        select: 'nombreComercial descripcion logo slug contacto ubicacion emprendedor',
         populate: {
           path: 'emprendedor',
           select: 'nombre apellido'
@@ -104,7 +123,9 @@ export const obtenerProducto = async (req, res) => {
   }
 };
 
-// Actualizar producto
+// -----------------------------
+// ACTUALIZAR PRODUCTO
+// -----------------------------
 export const actualizarProducto = async (req, res) => {
   const productoId = req.params.id;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -155,7 +176,9 @@ export const actualizarProducto = async (req, res) => {
   }
 };
 
-// Eliminar producto
+// -----------------------------
+// ELIMINAR PRODUCTO
+// -----------------------------
 export const eliminarProducto = async (req, res) => {
   const productoId = req.params.id;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -182,14 +205,16 @@ export const eliminarProducto = async (req, res) => {
   }
 };
 
-// Obtener todos los productos (públicos)
+// -----------------------------
+// OBTENER TODOS LOS PRODUCTOS (PÚBLICOS)
+// -----------------------------
 export const obtenerTodosLosProductos = async (req, res) => {
   try {
     const productos = await Producto.find()
       .populate('categoria')
       .populate({
         path: 'emprendimiento',
-        select: 'nombreComercial descripcion emprendedor',
+        select: 'nombreComercial descripcion logo slug contacto ubicacion emprendedor',
         populate: {
           path: 'emprendedor',
           select: 'nombre apellido'
