@@ -18,10 +18,13 @@ const router = Router()
 // -----------------------------
 router.get('/publicos', obtenerEmprendimientosPublicos)
 
-// RUTA POR SLUG  (DEBE IR ANTES DE /:id)
+// RUTA PÚBLICA POR SLUG (URL amigable para frontend)
+router.get('/publico/:slug', obtenerEmprendimientoPorSlug)
+
+// RUTA ALTERNATIVA (compatibilidad)
 router.get('/s/:slug', obtenerEmprendimientoPorSlug)
 
-// RUTA POR ID
+// RUTA POR ID (debe ir después de las rutas por slug)
 router.get('/:id', obtenerEmprendimiento)
 
 // -----------------------------
