@@ -6,11 +6,12 @@ const emprendimientoSchema = new Schema({
     required: true,
     trim: true
   },
+
   slug: {
-  type: String,
-  unique: true,
-  trim: true
-},
+    type: String,
+    unique: true,
+    trim: true
+  },
 
   descripcion: {
     type: String,
@@ -52,4 +53,3 @@ const emprendimientoSchema = new Schema({
 })
 
 export default model('Emprendimiento', emprendimientoSchema)
-
