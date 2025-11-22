@@ -1,7 +1,22 @@
 import Emprendimiento from '../models/Emprendimiento.js'
 import Categoria from '../models/Categoria.js'
 
-// Crear emprendimiento
+// -------------------------------
+// FUNCION PARA CREAR SLUG
+// -------------------------------
+const crearSlug = (texto) => {
+  return texto
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')     
+    .replace(/[^\w\-]+/g, '') 
+    .replace(/\-\-+/g, '-');  
+};
+
+// -------------------------------
+// CREAR EMPRENDIMIENTO
+// -------------------------------
 export const crearEmprendimiento = async (req, res) => {
   const { nombreComercial, descripcion, logo, ubicacion, contacto, categorias } = req.body
 
@@ -11,8 +26,11 @@ export const crearEmprendimiento = async (req, res) => {
   }
 
   try {
+    const slug = crearSlug(nombreComercial);
+
     const nuevoEmprendimiento = new Emprendimiento({
       nombreComercial,
+      slug,
       descripcion,
       logo,
       ubicacion,
@@ -28,7 +46,9 @@ export const crearEmprendimiento = async (req, res) => {
   }
 }
 
-// Obtener todos los emprendimientos del emprendedor autenticado
+// -------------------------------
+// OBTENER MIS EMPRENDIMIENTOS
+// -------------------------------
 export const obtenerMisEmprendimientos = async (req, res) => {
   const emprendedorId = req.emprendedorBDD?._id
 
@@ -41,7 +61,9 @@ export const obtenerMisEmprendimientos = async (req, res) => {
   }
 }
 
-// Obtener un emprendimiento por ID (público si está activo, privado si es del emprendedor autenticado)
+// -------------------------------
+// OBTENER EMPRENDIMIENTO POR ID
+// -------------------------------
 export const obtenerEmprendimiento = async (req, res) => {
   const { id } = req.params;
 
@@ -54,13 +76,12 @@ export const obtenerEmprendimiento = async (req, res) => {
       return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
     }
 
-    // Si el estado es "Activo", puede verlo cualquiera
     if (emprendimiento.estado === 'Activo') {
       return res.json(emprendimiento);
     }
 
-    // Si el usuario autenticado es el dueño, también puede verlo
     const emprendedorId = req.emprendedorBDD?._id;
+
     if (emprendedorId && emprendimiento.emprendedor.toString() === emprendedorId.toString()) {
       return res.json(emprendimiento);
     }
@@ -71,8 +92,30 @@ export const obtenerEmprendimiento = async (req, res) => {
   }
 };
 
+// -------------------------------
+// OBTENER EMPRENDIMIENTO POR SLUG
+// -------------------------------
+export const obtenerEmprendimientoPorSlug = async (req, res) => {
+  const { slug } = req.params;
 
-// Actualizar emprendimiento
+  try {
+    const emprendimiento = await Emprendimiento.findOne({ slug, estado: 'Activo' })
+      .populate('categorias', 'nombre')
+      .populate('emprendedor', 'nombre apellido descripcion enlaces');
+
+    if (!emprendimiento) {
+      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
+    }
+
+    res.json(emprendimiento);
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener emprendimiento por URL', error: error.message });
+  }
+};
+
+// -------------------------------
+// ACTUALIZAR EMPRENDIMIENTO
+// -------------------------------
 export const actualizarEmprendimiento = async (req, res) => {
   const { id } = req.params
   const emprendedorId = req.emprendedorBDD?._id
@@ -88,11 +131,15 @@ export const actualizarEmprendimiento = async (req, res) => {
       return res.status(403).json({ mensaje: 'No tienes permiso para actualizar este emprendimiento' })
     }
 
-    // Solo se actualizan campos permitidos
     const campos = ['nombreComercial', 'descripcion', 'logo', 'ubicacion', 'contacto', 'categorias', 'estado']
     campos.forEach(campo => {
       if (req.body[campo] !== undefined) {
         emprendimiento[campo] = req.body[campo]
+
+        // Si cambió el nombre, actualizar el slug
+        if (campo === 'nombreComercial') {
+          emprendimiento.slug = crearSlug(req.body[campo])
+        }
       }
     })
 
@@ -103,7 +150,9 @@ export const actualizarEmprendimiento = async (req, res) => {
   }
 }
 
-// Eliminar emprendimiento
+// -------------------------------
+// ELIMINAR EMPRENDIMIENTO
+// -------------------------------
 export const eliminarEmprendimiento = async (req, res) => {
   const { id } = req.params
   const emprendedorId = req.emprendedorBDD?._id
@@ -125,7 +174,10 @@ export const eliminarEmprendimiento = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al eliminar emprendimiento', error: error.message })
   }
 }
-// Obtener todos los emprendimientos públicos (activos)
+
+// -------------------------------
+// OBTENER EMPRENDIMIENTOS PUBLICOS
+// -------------------------------
 export const obtenerEmprendimientosPublicos = async (req, res) => {
   try {
     const emprendimientos = await Emprendimiento.find({ estado: 'Activo' })
@@ -137,4 +189,3 @@ export const obtenerEmprendimientosPublicos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener emprendimientos públicos', error: error.message })
   }
 }
-
