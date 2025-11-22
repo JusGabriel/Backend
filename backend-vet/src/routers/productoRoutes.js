@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from 'express';
 import {
   crearProducto,
   obtenerProductosPorEmprendedor,
@@ -6,28 +6,28 @@ import {
   actualizarProducto,
   eliminarProducto,
   obtenerTodosLosProductos
-} from "../controllers/productoController.js";
+} from '../controllers/productoController.js';
 
-import verificarAutenticacionEmprendedor from "../middlewares/autenticacionEmprendedor.js";
+import { verificarTokenJWT } from '../middleware/JWT.js'; // Middleware de autenticación
 
-const router = express.Router();
+const router = Router();
 
-// Crear producto
-router.post("/", verificarAutenticacionEmprendedor, crearProducto);
+// Crear producto (solo con JWT)
+router.post('/', verificarTokenJWT, crearProducto);
 
-// Productos de un emprendedor específico
-router.get("/emprendedor/:emprendedorId", obtenerProductosPorEmprendedor);
+// Obtener todos los productos (públicos)
+router.get('/todos', obtenerTodosLosProductos);
 
-// Obtener 1 producto
-router.get("/:id", obtenerProducto);
+// Obtener todos los productos de un emprendedor
+router.get('/emprendedor/:emprendedorId', obtenerProductosPorEmprendedor);
 
-// Actualizar producto
-router.put("/:id", verificarAutenticacionEmprendedor, actualizarProducto);
+// Obtener un producto por ID
+router.get('/:id', obtenerProducto);
 
-// Eliminar producto
-router.delete("/:id", verificarAutenticacionEmprendedor, eliminarProducto);
+// Actualizar producto (solo dueño)
+router.put('/:id', verificarTokenJWT, actualizarProducto);
 
-// Obtener todos los productos (público)
-router.get("/", obtenerTodosLosProductos);
+// Eliminar producto (solo dueño)
+router.delete('/:id', verificarTokenJWT, eliminarProducto);
 
 export default router;
