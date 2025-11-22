@@ -2,16 +2,45 @@ import Emprendimiento from '../models/Emprendimiento.js'
 import Categoria from '../models/Categoria.js'
 
 // -------------------------------
-// FUNCION PARA CREAR SLUG
+// FUNCION PARA CREAR SLUG BASE
 // -------------------------------
-const crearSlug = (texto) => {
+const crearSlugBase = (texto) => {
   return texto
     .toString()
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, '-')     
-    .replace(/[^\w\-]+/g, '') 
-    .replace(/\-\-+/g, '-');  
+    .normalize('NFD')                 // quita tildes
+    .replace(/[\u0300-\u036f]/g, '')  // quita diacríticos remanentes
+    .replace(/\s+/g, '-')             // espacios -> guiones
+    .replace(/[^\w\-]+/g, '')         // quitar caracteres raros
+    .replace(/\-\-+/g, '-');          // evitar guiones dobles
+};
+
+// -------------------------------
+// ASEGURAR SLUG UNICO (CREACION)
+// -------------------------------
+const asegurarSlugUnico = async (baseSlug) => {
+  let slug = baseSlug;
+  let i = 1;
+  while (await Emprendimiento.findOne({ slug })) {
+    slug = `${baseSlug}-${i}`;
+    i++;
+  }
+  return slug;
+};
+
+// -------------------------------
+// ASEGURAR SLUG UNICO (ACTUALIZAR)
+// excludeId: id del doc que se está actualizando
+// -------------------------------
+const asegurarSlugUnicoParaUpdate = async (baseSlug, excludeId) => {
+  let slug = baseSlug;
+  let i = 1;
+  while (await Emprendimiento.findOne({ slug, _id: { $ne: excludeId } })) {
+    slug = `${baseSlug}-${i}`;
+    i++;
+  }
+  return slug;
 };
 
 // -------------------------------
@@ -26,7 +55,8 @@ export const crearEmprendimiento = async (req, res) => {
   }
 
   try {
-    const slug = crearSlug(nombreComercial);
+    const baseSlug = crearSlugBase(nombreComercial || '');
+    const slug = await asegurarSlugUnico(baseSlug);
 
     const nuevoEmprendimiento = new Emprendimiento({
       nombreComercial,
@@ -93,7 +123,7 @@ export const obtenerEmprendimiento = async (req, res) => {
 };
 
 // -------------------------------
-// OBTENER EMPRENDIMIENTO POR SLUG
+// OBTENER EMPRENDIMIENTO POR SLUG (PÚBLICO)
 // -------------------------------
 export const obtenerEmprendimientoPorSlug = async (req, res) => {
   const { slug } = req.params;
@@ -132,16 +162,17 @@ export const actualizarEmprendimiento = async (req, res) => {
     }
 
     const campos = ['nombreComercial', 'descripcion', 'logo', 'ubicacion', 'contacto', 'categorias', 'estado']
-    campos.forEach(campo => {
+    for (const campo of campos) {
       if (req.body[campo] !== undefined) {
         emprendimiento[campo] = req.body[campo]
 
-        // Si cambió el nombre, actualizar el slug
+        // Si cambió el nombre, actualizar el slug (y hacerlo único)
         if (campo === 'nombreComercial') {
-          emprendimiento.slug = crearSlug(req.body[campo])
+          const baseSlug = crearSlugBase(req.body[campo]);
+          emprendimiento.slug = await asegurarSlugUnicoParaUpdate(baseSlug, id);
         }
       }
-    })
+    }
 
     const actualizado = await emprendimiento.save()
     res.json({ mensaje: 'Emprendimiento actualizado', emprendimiento: actualizado })
