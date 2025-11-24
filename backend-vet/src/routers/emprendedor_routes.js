@@ -1,3 +1,4 @@
+// routes/emprendedores.js
 import { Router } from "express"
 import {
   registro,
@@ -10,6 +11,7 @@ import {
   actualizarPassword,
   actualizarPerfil,
   verEmprendedores,
+  obtenerEmprendedorPorId,
   actualizarEmprendedor,
   eliminarEmprendedor
 } from "../controllers/emprendedor_controllers.js"
@@ -36,9 +38,12 @@ router.put('/emprendedore/actualizarpassword/:id', verificarTokenJWT, actualizar
 
 // CRUD emprendedores (solo para admins o uso general)
 router.get("/todos", verEmprendedores)
+
+// --- NUEVO: obtener emprendedor por id (público)
+router.get('/:id', obtenerEmprendedorPorId)
+
+// Rutas de administración/actualización/eliminación
 router.put('/actualizar/:id', verificarTokenJWT, actualizarEmprendedor)
 router.delete('/eliminar/:id', verificarTokenJWT, eliminarEmprendedor)
 
 export default router
-
-
