@@ -1,4 +1,3 @@
-// controllers/emprendedor_controllers.js
 import Emprendedor from '../models/Emprendedor.js'
 import {
   sendMailToRegisterEmprendedor,
@@ -246,28 +245,6 @@ const verEmprendedores = async (req, res) => {
   }
 }
 
-// ======== NUEVA FUNCION: Obtener emprendedor por ID (público) ========
-const obtenerEmprendedorPorId = async (req, res) => {
-  const { id } = req.params
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ ok: false, msg: "ID no válido" })
-  }
-
-  try {
-    const emprendedor = await Emprendedor.findById(id).select('nombre apellido email telefono enlaces rol status')
-    if (!emprendedor) {
-      return res.status(404).json({ ok: false, msg: 'Emprendedor no encontrado' })
-    }
-    // Devolvemos como { ok: true, emprendedor } para consistencia
-    res.status(200).json({ ok: true, emprendedor })
-  } catch (error) {
-    console.error('Error al obtener emprendedor por id', error)
-    res.status(500).json({ ok: false, msg: 'Error del servidor' })
-  }
-}
-// ===================================================================
-
 const actualizarEmprendedor = async (req, res) => {
   const { id } = req.params
 
@@ -377,7 +354,6 @@ export {
   actualizarPassword,
   actualizarPerfil,
   verEmprendedores,
-  obtenerEmprendedorPorId, // <-- exportamos la nueva función
   actualizarEmprendedor,
   eliminarEmprendedor
 }
