@@ -1,51 +1,96 @@
-import { Schema, model } from "mongoose";
+import { Schema, model } from 'mongoose'
+import bcrypt from 'bcryptjs'
 
-const productoSchema = new Schema({
+const emprendedorSchema = new Schema({
   nombre: {
     type: String,
     required: true,
     trim: true
   },
-
+  apellido: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    required: true,
+    trim: true,
+    unique: true
+  },
+  password: {
+    type: String,
+    required: function() {
+        // Requerido solo si NO hay Google OAuth
+        return !this.idGoogle;
+    }
+    },
+    idGoogle: {
+      type: String,
+      default: null
+    },
   descripcion: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
-
-  precio: {
-    type: Number,
-    required: true
+  favoritos: [{
+  type: Schema.Types.ObjectId,
+  ref: 'Emprendimiento'
+}],
+  enlaces: {
+    facebook: { type: String, default: null },
+    instagram: { type: String, default: null },
+    sitioWeb: { type: String, default: null }
   },
-
-  imagen: {
+  telefono: {
     type: String,
+    default: null,
     trim: true
   },
-
-  // Relación correcta -> pertenece a un emprendimiento
-  emprendimiento: {
-    type: Schema.Types.ObjectId,
-    ref: 'Emprendimiento',
-    required: true
-  },
-
-  categoria: {
-    type: Schema.Types.ObjectId,
-    ref: 'Categoria',
+  rol:{
+        type:String,
+        default:"Emprendedor"
+    },
+  
+  token: {
+    type: String,
     default: null
   },
-
-  stock: {
-    type: Number,
-    default: 0
+  confirmEmail: {
+    type: Boolean,
+    default: false
   },
-
-  estado: {
+  status: {
     type: Boolean,
     default: true
+  },
+  estado_Emprendedor: {
+    type: String,
+    enum: ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido'], 
+    default: 'Activo'
   }
 }, {
   timestamps: true
-});
+})
 
-export default model("Producto", productoSchema);
+/* -------------------- MÉTODOS -------------------- */
+
+// Cifrar contraseña
+emprendedorSchema.methods.encrypPassword = async function (password) {
+  const salt = await bcrypt.genSalt(10)
+  return await bcrypt.hash(password, salt)
+}
+
+// Comparar contraseñas
+emprendedorSchema.methods.matchPassword = async function (password) {
+  return await bcrypt.compare(password, this.password)
+}
+
+// Generar token
+emprendedorSchema.methods.crearToken = function () {
+  this.token = Math.random().toString(36).slice(2)
+  return this.token
+}
+
+export default model('Emprendedor', emprendedorSchema)
