@@ -18,7 +18,7 @@ const emprendimientoSchema = new Schema({
     default: ''
   },
   logo: {
-    type: String, // URL del logo
+    type: String, // URL del logoo
     default: null
   },
   ubicacion: {
@@ -53,3 +53,4 @@ const emprendimientoSchema = new Schema({
 })
 
 export default model('Emprendimiento', emprendimientoSchema)
+
