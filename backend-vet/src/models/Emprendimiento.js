@@ -1,61 +1,51 @@
-import { Schema, model } from 'mongoose'
+import { Schema, model } from "mongoose";
 
-const emprendimientoSchema = new Schema({
-  nombreComercial: {
+const productoSchema = new Schema({
+  nombre: {
     type: String,
     required: true,
     trim: true
   },
 
-  slug: {
+  descripcion: {
     type: String,
-    unique: true,
     trim: true
   },
 
-  descripcion: {
-    type: String,
-    default: ''
-  },
-
-  logo: {
-    type: String, 
-    default: null
-  },
-
-  ubicacion: {
-    direccion: { type: String, default: null },
-    ciudad: { type: String, default: null },
-    lat: { type: Number, default: null },
-    lng: { type: Number, default: null }
-  },
-
-  contacto: {
-    telefono: { type: String, default: null },
-    email: { type: String, default: null },
-    sitioWeb: { type: String, default: null },
-    facebook: { type: String, default: null },
-    instagram: { type: String, default: null }
-  },
-
-  emprendedor: {
-    type: Schema.Types.ObjectId,
-    ref: 'Emprendedor',
+  precio: {
+    type: Number,
     required: true
   },
 
-  categorias: [{
+  imagen: {
+    type: String,
+    trim: true
+  },
+
+  // Relación correcta -> pertenece a un emprendimiento
+  emprendimiento: {
     type: Schema.Types.ObjectId,
-    ref: 'Categoria'
-  }],
+    ref: 'Emprendimiento',
+    required: true
+  },
+
+  categoria: {
+    type: Schema.Types.ObjectId,
+    ref: 'Categoria',
+    default: null
+  },
+
+  stock: {
+    type: Number,
+    default: 0
+  },
 
   estado: {
-    type: String,
-    enum: ['Activo', 'Inactivo', 'Suspendido'],
-    default: 'Activo'
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true
-})
+});
 
-export default model('Emprendimiento', emprendimientoSchema)
+export default model("Producto", productoSchema);
