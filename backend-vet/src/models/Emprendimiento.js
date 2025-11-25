@@ -1,96 +1,55 @@
 import { Schema, model } from 'mongoose'
-import bcrypt from 'bcryptjs'
 
-const emprendedorSchema = new Schema({
-  nombre: {
+const emprendimientoSchema = new Schema({
+  nombreComercial: {
     type: String,
     required: true,
     trim: true
   },
-  apellido: {
+
+  slug: {
     type: String,
-    required: true,
+    unique: true,
     trim: true
   },
-  email: {
-    type: String,
-    required: true,
-    trim: true,
-    unique: true
-  },
-  password: {
-    type: String,
-    required: function() {
-        // Requerido solo si NO hay Google OAuth
-        return !this.idGoogle;
-    }
-    },
-    idGoogle: {
-      type: String,
-      default: null
-    },
+
   descripcion: {
     type: String,
-    trim: true,
     default: ''
   },
-  favoritos: [{
-  type: Schema.Types.ObjectId,
-  ref: 'Emprendimiento'
-}],
-  enlaces: {
-    facebook: { type: String, default: null },
-    instagram: { type: String, default: null },
-    sitioWeb: { type: String, default: null }
-  },
-  telefono: {
-    type: String,
-    default: null,
-    trim: true
-  },
-  rol:{
-        type:String,
-        default:"Emprendedor"
-    },
-  
-  token: {
-    type: String,
+  logo: {
+    type: String, // URL del logo
     default: null
   },
-  confirmEmail: {
-    type: Boolean,
-    default: false
+  ubicacion: {
+    direccion: { type: String, default: null },
+    ciudad: { type: String, default: null },
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null }
   },
-  status: {
-    type: Boolean,
-    default: true
+  contacto: {
+    telefono: { type: String, default: null },
+    email: { type: String, default: null },
+    sitioWeb: { type: String, default: null },
+    facebook: { type: String, default: null },
+    instagram: { type: String, default: null }
   },
-  estado_Emprendedor: {
+  emprendedor: {
+    type: Schema.Types.ObjectId,
+    ref: 'Emprendedor',
+    required: true
+  },
+  categorias: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Categoria'
+  }],
+  estado: {
     type: String,
-    enum: ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido'], 
+    enum: ['Activo', 'Inactivo', 'Suspendido'],
     default: 'Activo'
   }
 }, {
   timestamps: true
 })
 
-/* -------------------- MÉTODOS -------------------- */
-
-// Cifrar contraseña
-emprendedorSchema.methods.encrypPassword = async function (password) {
-  const salt = await bcrypt.genSalt(10)
-  return await bcrypt.hash(password, salt)
-}
-
-// Comparar contraseñas
-emprendedorSchema.methods.matchPassword = async function (password) {
-  return await bcrypt.compare(password, this.password)
-}
-
-// Generar token
-emprendedorSchema.methods.crearToken = function () {
-  this.token = Math.random().toString(36).slice(2)
-  return this.token
-}
-
-export default model('Emprendedor', emprendedorSchema)
+export default model('Emprendimiento', emprendimientoSchema)
