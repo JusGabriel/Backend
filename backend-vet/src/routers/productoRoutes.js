@@ -29,5 +29,7 @@ router.put('/:id', verificarTokenJWT, actualizarProducto);
 
 // Eliminar producto (solo dueño)
 router.delete('/:id', verificarTokenJWT, eliminarProducto);
+router.get('/emprendimiento/:emprendimientoId', obtenerProductosPorEmprendimiento);
 
 export default router;
+
