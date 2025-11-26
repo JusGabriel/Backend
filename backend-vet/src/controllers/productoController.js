@@ -1,3 +1,4 @@
+
 import Producto from '../models/Productos.js';
 
 // Funciones de validación interna
