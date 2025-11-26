@@ -1,20 +1,7 @@
-# Imagen base recomendada por Railway
-FROM node:18
+#Usa la imagen base de Nginx
+ FROM nginx:alpine
 
-# Crear carpeta de la app
-WORKDIR /app
+# Copia el contenido de la carpeta public en la ruta que Nginx usa para servir archivos
+ COPY src/ /usr/share/nginx/html
 
-# Copiar package.json y lock
-COPY package*.json ./
 
-# Instalar dependencias
-RUN npm install --production
-
-# Copiar el resto del proyecto
-COPY . .
-
-# Exponer puerto del backend
-EXPOSE 3000
-
-# Comando de inicio
-CMD ["npm", "start"]
