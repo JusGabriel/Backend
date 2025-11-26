@@ -226,3 +226,33 @@ export const obtenerTodosLosProductos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
+// Obtener productos de un emprendimiento específico
+export const obtenerProductosPorEmprendimiento = async (req, res) => {
+  const { emprendimientoId } = req.params;
+
+  try {
+    const productos = await Producto.find({ emprendimiento: emprendimientoId })
+      .populate('categoria')
+      .populate({
+        path: 'emprendimiento',
+        select: 'nombreComercial descripcion logo slug emprendedor',
+        populate: {
+          path: 'emprendedor',
+          select: 'nombre apellido'
+        }
+      });
+
+    if (!productos.length) {
+      return res.status(200).json({
+        mensaje: 'Este emprendimiento aún no tiene productos',
+        productos: []
+      });
+    }
+
+    res.json(productos);
+
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
+  }
+};
+
