@@ -1,7 +1,13 @@
-#Usa la imagen base de Nginx
- FROM nginx:alpine
+FROM node:18-alpine
 
-# Copia el contenido de la carpeta public en la ruta que Nginx usa para servir archivos
- COPY src/ /usr/share/nginx/html
+WORKDIR /app
 
+COPY package*.json ./
 
+RUN npm ci --omit=dev
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["npm", "start"]
