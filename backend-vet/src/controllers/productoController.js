@@ -1,7 +1,7 @@
 // controllers/productosController.js
 import mongoose from 'mongoose';
 import Producto from '../models/Productos.js';
-import Emprendimiento from '../models/Emprendimientos.js';
+import Emprendimiento from '../models/Emprendimiento.js';
 
 // Funciones de validación interna
 function validarNombre(nombre) {
@@ -248,3 +248,4 @@ export const obtenerTodosLosProductos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
+
