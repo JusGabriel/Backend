@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose'
+import { Schema, model } from 'mongoose';
 
 const emprendimientoSchema = new Schema({
   nombreComercial: {
@@ -49,7 +49,16 @@ const emprendimientoSchema = new Schema({
     default: 'Activo'
   }
 }, {
-  timestamps: true
-})
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
 
-export default model('Emprendimiento', emprendimientoSchema)
+// Virtual para obtener los productos relacionados a este emprendimiento
+emprendimientoSchema.virtual('productos', {
+  ref: 'Producto',
+  localField: '_id',
+  foreignField: 'emprendimiento'
+});
+
+export default model('Emprendimiento', emprendimientoSchema);
