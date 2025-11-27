@@ -23,7 +23,7 @@ dotenv.config();
 
 const app = express();
 
-// Sesión y Passport
+//Sesión y Passport
 app.use(session({
   secret: 'quitoemprende123',
   resave: false,
@@ -176,3 +176,4 @@ app.use((req, res) => {
 });
 
 export default app;
+
