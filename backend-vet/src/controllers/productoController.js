@@ -1,8 +1,7 @@
+
 import Producto from '../models/Productos.js';
-import Emprendimiento from '../models/Emprendimiento.js'; // <-- necesario para buscar emprendimiento
 
-// --- Funciones de validación ---
-
+// Funciones de validación interna
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || nombre.trim().length < 3) {
     return 'El nombre es obligatorio y debe tener al menos 3 caracteres';
@@ -24,22 +23,14 @@ function validarStock(stock) {
   return null;
 }
 
-// ✔ Nueva validación de categoría opcional
 function validarCategoria(categoria) {
-  // Si no se envía categoría → es válido
-  if (categoria === undefined || categoria === null || categoria === "") {
-    return null;
+  if (!categoria || typeof categoria !== 'string' || categoria.trim() === '') {
+    return 'La categoría es obligatoria';
   }
-
-  // Si se envía, debe ser un string válido
-  if (typeof categoria !== "string") {
-    return "La categoría debe ser un ID válido o null";
-  }
-
   return null;
 }
 
-// --- Crear producto ---
+// Crear producto
 export const crearProducto = async (req, res) => {
   const { nombre, descripcion, precio, imagen, categoria, stock } = req.body;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -62,20 +53,14 @@ export const crearProducto = async (req, res) => {
   if (errorCategoria) return res.status(400).json({ mensaje: errorCategoria });
 
   try {
-    // Buscar el emprendimiento que pertenece al emprendedor autenticado
-    const emprendimiento = await Emprendimiento.findOne({ emprendedor: emprendedorId });
-    if (!emprendimiento) {
-      return res.status(404).json({ mensaje: 'No tienes un emprendimiento registrado. Crea un emprendimiento antes de registrar productos.' });
-    }
-
     const nuevoProducto = await Producto.create({
       nombre,
       descripcion,
       precio,
       imagen,
-      categoria: categoria || null,   // asegura null si viene vacío
+      categoria,
       stock,
-      emprendimiento: emprendimiento._id // <-- aquí la relación correcta
+      emprendimiento: emprendedorId
     });
 
     res.status(201).json({ mensaje: 'Producto creado', producto: nuevoProducto });
@@ -84,27 +69,19 @@ export const crearProducto = async (req, res) => {
   }
 };
 
-// --- Obtener productos por emprendedor (todos los productos de los emprendimientos del emprendedor) ---
+// Obtener todos los productos de un emprendedor
 export const obtenerProductosPorEmprendedor = async (req, res) => {
   const { emprendedorId } = req.params;
 
   try {
-    // Buscamos todos los emprendimientos del emprendedor
-    const emprendimientos = await Emprendimiento.find({ emprendedor: emprendedorId }).select('_id');
-    const ids = emprendimientos.map(e => e._id);
-
-    if (ids.length === 0) {
-      return res.json([]); // no tiene emprendimientos -> sin productos
-    }
-
-    const productos = await Producto.find({ emprendimiento: { $in: ids } }).populate('categoria');
+    const productos = await Producto.find({ emprendimiento: emprendedorId }).populate('categoria');
     res.json(productos);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
 
-// --- Obtener producto por ID ---
+// Obtener producto por ID
 export const obtenerProducto = async (req, res) => {
   try {
     const producto = await Producto.findById(req.params.id)
@@ -128,7 +105,7 @@ export const obtenerProducto = async (req, res) => {
   }
 };
 
-// --- Actualizar producto ---
+// Actualizar producto
 export const actualizarProducto = async (req, res) => {
   const productoId = req.params.id;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -148,34 +125,80 @@ export const actualizarProducto = async (req, res) => {
       return res.status(403).json({ mensaje: 'No tienes permiso para editar este producto' });
     }
 
-    // Validaciones condicionales
-    if (req.body.nombre !== undefined) {
+    // Validar campos si vienen en req.body
+    if (req.body.nombre) {
       const errorNombre = validarNombre(req.body.nombre);
       if (errorNombre) return res.status(400).json({ mensaje: errorNombre });
     }
-
     if (req.body.precio !== undefined) {
       const errorPrecio = validarPrecio(req.body.precio);
       if (errorPrecio) return res.status(400).json({ mensaje: errorPrecio });
     }
-
     if (req.body.stock !== undefined) {
       const errorStock = validarStock(req.body.stock);
       if (errorStock) return res.status(400).json({ mensaje: errorStock });
     }
-
-    // ✔ validación correcta de categoría opcional
-    if (req.body.categoria !== undefined) {
+    if (req.body.categoria) {
       const errorCategoria = validarCategoria(req.body.categoria);
       if (errorCategoria) return res.status(400).json({ mensaje: errorCategoria });
     }
 
-    // Actualizar campos permitidos
+    // Actualizar solo campos permitidos
     const camposActualizar = {};
     ['nombre', 'descripcion', 'precio', 'imagen', 'categoria', 'stock', 'estado'].forEach(campo => {
       if (req.body[campo] !== undefined) camposActualizar[campo] = req.body[campo];
     });
 
     const actualizado = await Producto.findByIdAndUpdate(productoId, camposActualizar, { new: true });
+    res.json({ mensaje: 'Producto actualizado', producto: actualizado });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al actualizar producto', error: error.message });
+  }
+};
 
-    res.json({ mensaje: 'Producto actualizado', producto:
+// Eliminar producto
+export const eliminarProducto = async (req, res) => {
+  const productoId = req.params.id;
+  const emprendedorId = req.emprendedorBDD?._id;
+
+  if (!emprendedorId) {
+    return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
+  }
+
+  try {
+    const producto = await Producto.findById(productoId);
+
+    if (!producto) {
+      return res.status(404).json({ mensaje: 'Producto no encontrado' });
+    }
+
+    if (producto.emprendimiento.toString() !== emprendedorId.toString()) {
+      return res.status(403).json({ mensaje: 'No tienes permiso para eliminar este producto' });
+    }
+
+    await producto.deleteOne();
+    res.json({ mensaje: 'Producto eliminado' });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al eliminar producto', error: error.message });
+  }
+};
+
+// Obtener todos los productos (públicos)
+export const obtenerTodosLosProductos = async (req, res) => {
+  try {
+    const productos = await Producto.find()
+      .populate('categoria')
+      .populate({
+        path: 'emprendimiento',
+        select: 'nombreComercial descripcion emprendedor',
+        populate: {
+          path: 'emprendedor',
+          select: 'nombre apellido'
+        }
+      });
+
+    res.json(productos);
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
+  }
+};
