@@ -1,4 +1,5 @@
 import Producto from '../models/Productos.js';
+import Emprendimiento from '../models/Emprendimiento.js'; // <-- necesario para buscar emprendimiento
 
 // --- Funciones de validación ---
 
@@ -61,14 +62,20 @@ export const crearProducto = async (req, res) => {
   if (errorCategoria) return res.status(400).json({ mensaje: errorCategoria });
 
   try {
+    // Buscar el emprendimiento que pertenece al emprendedor autenticado
+    const emprendimiento = await Emprendimiento.findOne({ emprendedor: emprendedorId });
+    if (!emprendimiento) {
+      return res.status(404).json({ mensaje: 'No tienes un emprendimiento registrado. Crea un emprendimiento antes de registrar productos.' });
+    }
+
     const nuevoProducto = await Producto.create({
       nombre,
       descripcion,
       precio,
       imagen,
-      categoria: categoria || null,   // ✔ asegura null si viene vacío
+      categoria: categoria || null,   // asegura null si viene vacío
       stock,
-      emprendimiento: emprendedorId
+      emprendimiento: emprendimiento._id // <-- aquí la relación correcta
     });
 
     res.status(201).json({ mensaje: 'Producto creado', producto: nuevoProducto });
@@ -77,12 +84,20 @@ export const crearProducto = async (req, res) => {
   }
 };
 
-// --- Obtener productos por emprendedor ---
+// --- Obtener productos por emprendedor (todos los productos de los emprendimientos del emprendedor) ---
 export const obtenerProductosPorEmprendedor = async (req, res) => {
   const { emprendedorId } = req.params;
 
   try {
-    const productos = await Producto.find({ emprendimiento: emprendedorId }).populate('categoria');
+    // Buscamos todos los emprendimientos del emprendedor
+    const emprendimientos = await Emprendimiento.find({ emprendedor: emprendedorId }).select('_id');
+    const ids = emprendimientos.map(e => e._id);
+
+    if (ids.length === 0) {
+      return res.json([]); // no tiene emprendimientos -> sin productos
+    }
+
+    const productos = await Producto.find({ emprendimiento: { $in: ids } }).populate('categoria');
     res.json(productos);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
@@ -163,55 +178,4 @@ export const actualizarProducto = async (req, res) => {
 
     const actualizado = await Producto.findByIdAndUpdate(productoId, camposActualizar, { new: true });
 
-    res.json({ mensaje: 'Producto actualizado', producto: actualizado });
-  } catch (error) {
-    res.status(500).json({ mensaje: 'Error al actualizar producto', error: error.message });
-  }
-};
-
-// --- Eliminar producto ---
-export const eliminarProducto = async (req, res) => {
-  const productoId = req.params.id;
-  const emprendedorId = req.emprendedorBDD?._id;
-
-  if (!emprendedorId) {
-    return res.status(401).json({ mensaje: 'No autorizado: debe ser un emprendedor autenticado' });
-  }
-
-  try {
-    const producto = await Producto.findById(productoId);
-
-    if (!producto) {
-      return res.status(404).json({ mensaje: 'Producto no encontrado' });
-    }
-
-    if (producto.emprendimiento.toString() !== emprendedorId.toString()) {
-      return res.status(403).json({ mensaje: 'No tienes permiso para eliminar este producto' });
-    }
-
-    await producto.deleteOne();
-    res.json({ mensaje: 'Producto eliminado' });
-  } catch (error) {
-    res.status(500).json({ mensaje: 'Error al eliminar producto', error: error.message });
-  }
-};
-
-// --- Obtener todos los productos públicos ---
-export const obtenerTodosLosProductos = async (req, res) => {
-  try {
-    const productos = await Producto.find()
-      .populate('categoria')
-      .populate({
-        path: 'emprendimiento',
-        select: 'nombreComercial descripcion emprendedor',
-        populate: {
-          path: 'emprendedor',
-          select: 'nombre apellido'
-        }
-      });
-
-    res.json(productos);
-  } catch (error) {
-    res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
-  }
-};
+    res.json({ mensaje: 'Producto actualizado', producto:
