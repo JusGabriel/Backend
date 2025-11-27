@@ -1,7 +1,7 @@
-
 import Producto from '../models/Productos.js';
 
-// Funciones de validación interna
+// --- Funciones de validación ---
+
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || nombre.trim().length < 3) {
     return 'El nombre es obligatorio y debe tener al menos 3 caracteres';
@@ -23,14 +23,22 @@ function validarStock(stock) {
   return null;
 }
 
+// ✔ Nueva validación de categoría opcional
 function validarCategoria(categoria) {
-  if (!categoria || typeof categoria !== 'string' || categoria.trim() === '') {
-    return 'La categoría es obligatoria';
+  // Si no se envía categoría → es válido
+  if (categoria === undefined || categoria === null || categoria === "") {
+    return null;
   }
+
+  // Si se envía, debe ser un string válido
+  if (typeof categoria !== "string") {
+    return "La categoría debe ser un ID válido o null";
+  }
+
   return null;
 }
 
-// Crear producto
+// --- Crear producto ---
 export const crearProducto = async (req, res) => {
   const { nombre, descripcion, precio, imagen, categoria, stock } = req.body;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -58,7 +66,7 @@ export const crearProducto = async (req, res) => {
       descripcion,
       precio,
       imagen,
-      categoria,
+      categoria: categoria || null,   // ✔ asegura null si viene vacío
       stock,
       emprendimiento: emprendedorId
     });
@@ -69,7 +77,7 @@ export const crearProducto = async (req, res) => {
   }
 };
 
-// Obtener todos los productos de un emprendedor
+// --- Obtener productos por emprendedor ---
 export const obtenerProductosPorEmprendedor = async (req, res) => {
   const { emprendedorId } = req.params;
 
@@ -81,7 +89,7 @@ export const obtenerProductosPorEmprendedor = async (req, res) => {
   }
 };
 
-// Obtener producto por ID
+// --- Obtener producto por ID ---
 export const obtenerProducto = async (req, res) => {
   try {
     const producto = await Producto.findById(req.params.id)
@@ -105,7 +113,7 @@ export const obtenerProducto = async (req, res) => {
   }
 };
 
-// Actualizar producto
+// --- Actualizar producto ---
 export const actualizarProducto = async (req, res) => {
   const productoId = req.params.id;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -125,38 +133,43 @@ export const actualizarProducto = async (req, res) => {
       return res.status(403).json({ mensaje: 'No tienes permiso para editar este producto' });
     }
 
-    // Validar campos si vienen en req.body
-    if (req.body.nombre) {
+    // Validaciones condicionales
+    if (req.body.nombre !== undefined) {
       const errorNombre = validarNombre(req.body.nombre);
       if (errorNombre) return res.status(400).json({ mensaje: errorNombre });
     }
+
     if (req.body.precio !== undefined) {
       const errorPrecio = validarPrecio(req.body.precio);
       if (errorPrecio) return res.status(400).json({ mensaje: errorPrecio });
     }
+
     if (req.body.stock !== undefined) {
       const errorStock = validarStock(req.body.stock);
       if (errorStock) return res.status(400).json({ mensaje: errorStock });
     }
-    if (req.body.categoria) {
+
+    // ✔ validación correcta de categoría opcional
+    if (req.body.categoria !== undefined) {
       const errorCategoria = validarCategoria(req.body.categoria);
       if (errorCategoria) return res.status(400).json({ mensaje: errorCategoria });
     }
 
-    // Actualizar solo campos permitidos
+    // Actualizar campos permitidos
     const camposActualizar = {};
     ['nombre', 'descripcion', 'precio', 'imagen', 'categoria', 'stock', 'estado'].forEach(campo => {
       if (req.body[campo] !== undefined) camposActualizar[campo] = req.body[campo];
     });
 
     const actualizado = await Producto.findByIdAndUpdate(productoId, camposActualizar, { new: true });
+
     res.json({ mensaje: 'Producto actualizado', producto: actualizado });
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al actualizar producto', error: error.message });
   }
 };
 
-// Eliminar producto
+// --- Eliminar producto ---
 export const eliminarProducto = async (req, res) => {
   const productoId = req.params.id;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -183,7 +196,7 @@ export const eliminarProducto = async (req, res) => {
   }
 };
 
-// Obtener todos los productos (públicos)
+// --- Obtener todos los productos públicos ---
 export const obtenerTodosLosProductos = async (req, res) => {
   try {
     const productos = await Producto.find()
