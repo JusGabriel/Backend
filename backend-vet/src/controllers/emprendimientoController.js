@@ -1,5 +1,5 @@
-import Emprendimiento from '../models/Emprendimiento.js'
-import Categoria from '../models/Categoria.js'
+import Emprendimiento from '../models/Emprendimiento.js';
+import Categoria from '../models/Categoria.js';
 
 // -------------------------------
 // FUNCION PARA CREAR SLUG BASE
@@ -101,6 +101,10 @@ export const obtenerEmprendimiento = async (req, res) => {
     const emprendimiento = await Emprendimiento.findById(id)
       .populate('categorias', 'nombre')
       .populate('emprendedor', 'nombre apellido descripcion enlaces')
+      .populate({
+        path: 'productos',
+        populate: { path: 'categoria', select: 'nombre' }
+      });
 
     if (!emprendimiento) {
       return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
@@ -123,7 +127,7 @@ export const obtenerEmprendimiento = async (req, res) => {
 };
 
 // -------------------------------
-// OBTENER EMPRENDIMIENTO POR SLUG (PÚBLICO)
+// OBTENER EMPRENDIMIENTO POR SLUG (PÚBLICO) + productos
 // -------------------------------
 export const obtenerEmprendimientoPorSlug = async (req, res) => {
   const { slug } = req.params;
@@ -131,12 +135,17 @@ export const obtenerEmprendimientoPorSlug = async (req, res) => {
   try {
     const emprendimiento = await Emprendimiento.findOne({ slug, estado: 'Activo' })
       .populate('categorias', 'nombre')
-      .populate('emprendedor', 'nombre apellido descripcion enlaces');
+      .populate('emprendedor', 'nombre apellido descripcion enlaces')
+      .populate({
+        path: 'productos',
+        populate: { path: 'categoria', select: 'nombre' }
+      });
 
     if (!emprendimiento) {
       return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
     }
 
+    // ahora en la respuesta ya viene emprendimiento.productos
     res.json(emprendimiento);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener emprendimiento por URL', error: error.message });
