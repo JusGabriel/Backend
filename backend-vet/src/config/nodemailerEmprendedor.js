@@ -3,110 +3,57 @@ import dotenv from "dotenv";
 dotenv.config();
 
 let transporter = nodemailer.createTransport({
-    service: 'gmail',
-    host: process.env.HOST_MAILTRAP,
-    port: process.env.PORT_MAILTRAP,
+    service: "gmail",
+    secure: false,
     auth: {
         user: process.env.USER_MAILTRAP,
         pass: process.env.PASS_MAILTRAP,
     }
 });
 
-/**
- * 📩 Plantilla HTML Profesional para Correos (reutilizable)
- * @param {string} title - Título principal
- * @param {string} message - Mensaje del cuerpo (puede tener HTML)
- * @param {string} buttonText - Texto del botón
- * @param {string} buttonLink - URL para el botón
- * @returns {string} - HTML completo para el correo
- */
+// Plantilla
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
-    <div style="max-width:600px; margin:0 auto; background:#fff; border:1px solid #e0e0e0; border-radius:12px; overflow:hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333;">
-        
-        <!-- Imagen cabecera -->
-        <div style="background-color:#f9f9f9;">
-            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" alt="Logo QuitoEmprende" style="width:100%; max-height:200px; object-fit:cover;">
-        </div>
-
-        <!-- Contenido -->
+    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e0e0e0;font-family:'Segoe UI';">
+        <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" style="width:100%;max-height:200px;object-fit:cover;">
         <div style="padding:25px;">
-            <h1 style="color:#004080; font-size:24px; margin-top:0;">${title}</h1>
-            <p style="font-size:16px; line-height:1.6; color:#555;">${message}</p>
-
-            <div style="text-align:center; margin:30px 0;">
-                <a href="${buttonLink}" 
-                   style="background-color:#28a745; color:#fff; text-decoration:none; padding:14px 28px; border-radius:6px; font-size:16px; font-weight:600; display:inline-block;">
-                   ${buttonText}
-                </a>
+            <h1 style="color:#004080;">${title}</h1>
+            <p>${message}</p>
+            <div style="text-align:center;margin:30px 0;">
+                <a href="${buttonLink}" style="background:#28a745;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;">${buttonText}</a>
             </div>
-
-            <p style="font-size:14px; color:#999; text-align:center;">
-                Si no solicitaste esta acción, puedes ignorar este mensaje.<br>
-                Tu información está protegida.
-            </p>
-        </div>
-
-        <!-- Footer -->
-        <div style="background-color:#f2f2f2; padding:18px; text-align:center; font-size:13px; color:#777;">
-            <p style="margin:0;">© 2024 QuitoEmprende · Todos los derechos reservados</p>
-            <p style="margin:4px 0 0;">Impulsando ideas, conectando emprendedores</p>
         </div>
     </div>`;
 };
 
-// 📧 Confirmación de cuenta para EMPRENDEDOR
+// Registro emprendedor
 const sendMailToRegisterEmprendedor = (userMail, token) => {
-    const confirmationUrl = `${process.env.URL_FRONTEND}/confirm/${token}`;
-
-    const htmlContent = emailTemplate(
-        "Bienvenido a QuitoEmprende",
-        `Gracias por registrarte en nuestra plataforma como <strong>EMPRENDEDOR</strong>. Para completar tu registro, haz clic en el siguiente botón:`,
+    const html = emailTemplate(
+        "Bienvenido Emprendedor",
+        `Completa tu registro en QuitoEmprende.`,
         "Confirmar Cuenta",
-        confirmationUrl
+        `${process.env.URL_FRONTEND}/confirm/${token}`
     );
 
-    let mailOptions = {
-        from: '"QuitoEmprende" <no-reply@quitoemprende.com>',
-        to: userMail,
-        subject: "QuitoEmprende - Confirmación de Cuenta para Emprendedor",
-        html: htmlContent
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            console.error("❌ Error al enviar correo de registro emprendedor:", error);
-        } else {
-            console.log("✅ Correo de confirmación emprendedor enviado:", info.messageId);
-        }
-    });
+    transporter.sendMail(
+        { from: process.env.USER_MAILTRAP, to: userMail, subject: "Confirmación Emprendedor", html },
+        err => err && console.error("❌ ERROR:", err)
+    );
 };
 
-// 🔑 Recuperación de contraseña para EMPRENDEDOR
+// Recuperación emprendedor
 const sendMailToRecoveryPasswordEmprendedor = (userMail, token) => {
-    const recoveryUrl = `${process.env.URL_FRONTEND}/reset/emprendedor/${token}`;
-
-    const htmlContent = emailTemplate(
-        "Recuperación de Contraseña",
-        `Recibimos una solicitud para restablecer tu contraseña en <strong>QuitoEmprende</strong>. Si tú la solicitaste, haz clic en el botón para continuar.`,
-        "Reestablecer Contraseña",
-        recoveryUrl
+    const html = emailTemplate(
+        "Recupera tu contraseña",
+        `Haz clic en el botón para continuar.`,
+        "Reestablecer",
+        `${process.env.URL_FRONTEND}/reset/emprendedor/${token}`
     );
 
-    let mailOptions = {
-        from: '"QuitoEmprende" <no-reply@quitoemprende.com>',
-        to: userMail,
-        subject: "QuitoEmprende - Reestablece tu Contraseña de Emprendedor",
-        html: htmlContent
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            console.error("❌ Error al enviar correo de recuperación emprendedor:", error);
-        } else {
-            console.log("✅ Correo de recuperación emprendedor enviado:", info.messageId);
-        }
-    });
+    transporter.sendMail(
+        { from: process.env.USER_MAILTRAP, to: userMail, subject: "Recuperación Emprendedor", html },
+        err => err && console.error("❌ ERROR:", err)
+    );
 };
 
 export {
