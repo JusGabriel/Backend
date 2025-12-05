@@ -2,17 +2,19 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
+/**
+ * TRANSPORTER GMAIL (FUNCIONAL)
+ */
 let transporter = nodemailer.createTransport({
     service: "gmail",
-    secure: false, // IMPORTANTE PARA RAILWAY
     auth: {
-        user: process.env.USER_MAILTRAP,
-        pass: process.env.PASS_MAILTRAP,
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS_APP, // contraseña de aplicación
     }
 });
 
 /**
- * Plantilla HTML
+ * PLANTILLA HTML
  */
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
@@ -30,33 +32,47 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
     </div>`;
 };
 
-// Registro administrador
+/**
+ * 📩 Enviar Correo de Confirmación (Administrador)
+ */
 const sendMailToRegister = (userMail, token) => {
     const html = emailTemplate(
         "Confirma tu Cuenta",
-        `Gracias por registrarte como Administrador.`,
+        "Gracias por registrarte como Administrador.",
         "Confirmar Cuenta",
         `${process.env.URL_FRONTEND}/confirm/${token}`
     );
 
     transporter.sendMail(
-        { from: process.env.USER_MAILTRAP, to: userMail, subject: "Confirmación de Cuenta", html },
-        err => err && console.error("❌ ERROR:", err)
+        {
+            from: process.env.GMAIL_USER,
+            to: userMail,
+            subject: "Confirmación de Cuenta",
+            html
+        },
+        err => err && console.error("❌ ERROR EN ENVÍO:", err)
     );
 };
 
-// Recuperación admin
+/**
+ * 📩 Enviar Correo de Recuperación de Contraseña (Administrador)
+ */
 const sendMailToRecoveryPassword = (userMail, token) => {
     const html = emailTemplate(
         "Reestablecer contraseña",
-        `Haz clic para cambiar tu contraseña.`,
+        "Haz clic para cambiar tu contraseña.",
         "Reestablecer",
         `${process.env.URL_FRONTEND}/reset/admin/${token}`
     );
 
     transporter.sendMail(
-        { from: process.env.USER_MAILTRAP, to: userMail, subject: "Recuperación de Contraseña", html },
-        err => err && console.error("❌ ERROR:", err)
+        {
+            from: process.env.GMAIL_USER,
+            to: userMail,
+            subject: "Recuperación de Contraseña",
+            html
+        },
+        err => err && console.error("❌ ERROR EN ENVÍO:", err)
     );
 };
 
