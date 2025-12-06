@@ -1,59 +1,84 @@
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
-let transporter = nodemailer.createTransport({
-    service: "gmail",
-    secure: false,
-    auth: {
-        user: process.env.USER_MAILTRAP,
-        pass: process.env.PASS_MAILTRAP,
-    }
-});
-
-// Plantilla
+/**
+ * 📌 PLANTILLA HTML
+ */
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
-    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e0e0e0;font-family:'Segoe UI';">
-        <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" style="width:100%;max-height:200px;object-fit:cover;">
+    <div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;font-family:'Segoe UI',sans-serif;color:#333;">
+        <div style="background-color:#f9f9f9;">
+            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" style="width:100%;max-height:200px;object-fit:cover;">
+        </div>
         <div style="padding:25px;">
-            <h1 style="color:#004080;">${title}</h1>
-            <p>${message}</p>
+            <h1 style="color:#004080;font-size:24px;margin-top:0;">${title}</h1>
+            <p style="font-size:16px;line-height:1.6;color:#555;">${message}</p>
             <div style="text-align:center;margin:30px 0;">
-                <a href="${buttonLink}" style="background:#007bff;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;">${buttonText}</a>
+                <a href="${buttonLink}" style="background-color:#007bff;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:600;">${buttonText}</a>
             </div>
         </div>
     </div>`;
 };
 
-// Registro cliente
+/**
+ * ⭐ FUNCIÓN CENTRAL PARA ENVIAR CORREOS CON BREVO API
+ */
+async function sendBrevoEmail(to, subject, html) {
+    try {
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+                "accept": "application/json",
+                "api-key": process.env.BREVO_API_KEY,
+                "content-type": "application/json"
+            },
+            body: JSON.stringify({
+                sender: {
+                    name: "QuitoEmprende",
+                    email: process.env.BREVO_SENDER_EMAIL   // ✔ SENDER VERIFICADO
+                },
+                to: [{ email: to }],
+                subject,
+                htmlContent: html
+            })
+        });
+
+        const data = await response.json();
+        console.log("📧 CORREO ENVIADO (BREVO):", data);
+        return data;
+
+    } catch (error) {
+        console.error("❌ ERROR EN BREVO API:", error);
+        return null;
+    }
+}
+
+/**
+ * 📩 Enviar correo de Confirmación (Cliente)
+ */
 const sendMailToRegisterCliente = (userMail, token) => {
     const html = emailTemplate(
         "Bienvenido Cliente",
-        `Completa tu registro.`,
+        "Completa tu registro y comienza a usar QuitoEmprende.",
         "Confirmar Cuenta",
         `${process.env.URL_FRONTEND}/confirm/${token}`
     );
 
-    transporter.sendMail(
-        { from: process.env.USER_MAILTRAP, to: userMail, subject: "Confirmación Cliente", html },
-        err => err && console.error("❌ ERROR:", err)
-    );
+    return sendBrevoEmail(userMail, "Confirmación Cliente", html);
 };
 
-// Recuperación cliente
+/**
+ * 📩 Enviar correo de Recuperación de Contraseña (Cliente)
+ */
 const sendMailToRecoveryPasswordCliente = (userMail, token) => {
     const html = emailTemplate(
         "Recuperación de contraseña",
-        `Haz clic para continuar.`,
-        "Reestablecer",
+        "Haz clic en el botón para recuperar tu acceso.",
+        "Restablecer",
         `${process.env.URL_FRONTEND}/reset/${token}`
     );
 
-    transporter.sendMail(
-        { from: process.env.USER_MAILTRAP, to: userMail, subject: "Recuperación Cliente", html },
-        err => err && console.error("❌ ERROR:", err)
-    );
+    return sendBrevoEmail(userMail, "Recuperación de Contraseña", html);
 };
 
 export {
