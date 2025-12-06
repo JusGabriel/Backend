@@ -1,22 +1,8 @@
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
 /**
- * 🔵 CONFIG SMTP BREVO (OFICIAL 2025)
- */
-let transporter = nodemailer.createTransport({
-    host: process.env.BREVO_SMTP_HOST,      // smtp-relay.brevo.com
-    port: process.env.BREVO_SMTP_PORT,      // 587
-    secure: false,                          // Brevo usa STARTTLS en 587
-    auth: {
-        user: process.env.BREVO_SMTP_USER,  // 9d7c04001@smtp-brevo.com
-        pass: process.env.BREVO_SMTP_PASS   // Clave SMTP generada
-    }
-});
-
-/**
- * 🌐 PLANTILLA HTML
+ * PLANTILLA HTML
  */
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
@@ -35,7 +21,37 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
 };
 
 /**
- * 📩 Enviar correo de Confirmación
+ * ⭐ FUNCIÓN GLOBAL PARA ENVIAR CORREOS CON BREVO API
+ */
+async function sendBrevoEmail(to, subject, html) {
+    try {
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+                "accept": "application/json",
+                "api-key": process.env.BREVO_API_KEY,
+                "content-type": "application/json"
+            },
+            body: JSON.stringify({
+                sender: {
+                    name: "QuitoEmprende",
+                    email: "no-reply@quitoemprende.com"
+                },
+                to: [{ email: to }],
+                subject: subject,
+                htmlContent: html
+            })
+        });
+
+        const data = await response.json();
+        console.log("📧 CORREO ENVIADO:", data);
+    } catch (error) {
+        console.error("❌ ERROR EN BREVO API:", error);
+    }
+}
+
+/**
+ * 📩 Enviar Correo de Confirmación (Administrador)
  */
 const sendMailToRegister = (userMail, token) => {
     const html = emailTemplate(
@@ -45,37 +61,21 @@ const sendMailToRegister = (userMail, token) => {
         `${process.env.URL_FRONTEND}/confirm/${token}`
     );
 
-    transporter.sendMail(
-        {
-            from: `"QuitoEmprende" <${process.env.BREVO_SMTP_USER}>`, // 👈 Brevo exige que sea tu remitente verificado
-            to: userMail,
-            subject: "Confirmación de Cuenta",
-            html
-        },
-        err => err && console.error("❌ ERROR EN ENVÍO:", err)
-    );
+    sendBrevoEmail(userMail, "Confirmación de Cuenta", html);
 };
 
 /**
- * 📩 Enviar correo de recuperación
+ * 📩 Enviar Correo de Recuperación de Contraseña (Administrador)
  */
 const sendMailToRecoveryPassword = (userMail, token) => {
     const html = emailTemplate(
-        "Restablecer Contraseña",
-        "Haz clic en el siguiente botón para cambiar tu contraseña.",
-        "Restablecer",
+        "Reestablecer contraseña",
+        "Haz clic para cambiar tu contraseña.",
+        "Reestablecer",
         `${process.env.URL_FRONTEND}/reset/admin/${token}`
     );
 
-    transporter.sendMail(
-        {
-            from: `"QuitoEmprende" <${process.env.BREVO_SMTP_USER}>`,
-            to: userMail,
-            subject: "Recuperación de Contraseña",
-            html
-        },
-        err => err && console.error("❌ ERROR EN ENVÍO:", err)
-    );
+    sendBrevoEmail(userMail, "Recuperación de Contraseña", html);
 };
 
 export { sendMailToRegister, sendMailToRecoveryPassword };
