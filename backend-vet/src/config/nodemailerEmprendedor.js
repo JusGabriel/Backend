@@ -1,96 +1,89 @@
-// ===============================
-//  EMAILS PARA EMPRENDEDOR
-// ===============================
-
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
-// -------------------------------
-// CONFIGURACIÓN DEL TRANSPORTER
-// -------------------------------
-// NOTA: Aquí sigues usando Gmail. Si luego migras a Brevo,
-// solo cambiamos este bloque.
-let transporter = nodemailer.createTransport({
-    service: "gmail",
-    secure: false,
-    auth: {
-        user: process.env.USER_MAILTRAP,  // correo emisor
-        pass: process.env.PASS_MAILTRAP,  // contraseña o app password
-    }
-});
-
-// -------------------------------
-// PLANTILLA BASE PARA EMPRENDEDOR
-// -------------------------------
+/**
+ * 📌 PLANTILLA HTML (MISMA QUE CLIENTE)
+ */
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
-    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e0e0e0;font-family:'Segoe UI';">
-        <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg"
-             style="width:100%;max-height:200px;object-fit:cover;">
-
+    <div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;font-family:'Segoe UI',sans-serif;color:#333;">
+        <div style="background-color:#f9f9f9;">
+            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" style="width:100%;max-height:200px;object-fit:cover;">
+        </div>
         <div style="padding:25px;">
-            <h1 style="color:#004080;">${title}</h1>
-            <p>${message}</p>
-
+            <h1 style="color:#004080;font-size:24px;margin-top:0;">${title}</h1>
+            <p style="font-size:16px;line-height:1.6;color:#555;">${message}</p>
             <div style="text-align:center;margin:30px 0;">
-                <a href="${buttonLink}"
-                   style="background:#28a745;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;">
-                    ${buttonText}
-                </a>
+                <a href="${buttonLink}" style="background-color:#007bff;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:600;">${buttonText}</a>
             </div>
         </div>
-    </div>
-    `;
+    </div>`;
 };
 
-// -------------------------------
-// 1) EMAIL: REGISTRO EMPRENDEDOR
-// -------------------------------
+/**
+ * ⭐ FUNCIÓN CENTRAL PARA ENVIAR CORREOS CON BREVO API
+ * (LA MISMA DE CLIENTE)
+ */
+async function sendBrevoEmail(to, subject, html) {
+    try {
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+                "accept": "application/json",
+                "api-key": process.env.BREVO_API_KEY,
+                "content-type": "application/json"
+            },
+            body: JSON.stringify({
+                sender: {
+                    name: "QuitoEmprende",
+                    email: "izasebas96@gmail.com" // ✔ mismo sender verificado
+                },
+                to: [{ email: to }],
+                subject,
+                htmlContent: html
+            })
+        });
+
+        const data = await response.json();
+        console.log("📧 CORREO ENVIADO (EMPRENDEDOR):", data);
+        return data;
+
+    } catch (error) {
+        console.error("❌ ERROR EN BREVO API:", error);
+        return null;
+    }
+}
+
+/**
+ * 📩 Enviar correo de Confirmación (Emprendedor)
+ */
 const sendMailToRegisterEmprendedor = (userMail, token) => {
     const html = emailTemplate(
         "Bienvenido Emprendedor",
-        `Completa tu registro en QuitoEmprende y activa tu cuenta.`,
+        "Completa tu registro y comienza a promocionar tus productos en QuitoEmprende.",
         "Confirmar Cuenta",
         `${process.env.URL_FRONTEND}/confirm/emprendedor/${token}`
     );
 
-    transporter.sendMail(
-        {
-            from: process.env.USER_MAILTRAP,
-            to: userMail,
-            subject: "Confirmación de Cuenta - Emprendedor",
-            html
-        },
-        (err) => err && console.error("❌ ERROR al enviar correo (registro emprendedor):", err)
-    );
+    // 👇 SOLO cambia el título del correo
+    return sendBrevoEmail(userMail, "Confirmación de Cuenta (Emprendedor)", html);
 };
 
-// ------------------------------------------
-// 2) EMAIL: RECUPERACIÓN DE CONTRASEÑA
-// ------------------------------------------
+/**
+ * 📩 Enviar correo de Recuperación de Contraseña (Emprendedor)
+ */
 const sendMailToRecoveryPasswordEmprendedor = (userMail, token) => {
     const html = emailTemplate(
-        "Recupera tu contraseña",
-        `Haz clic en el botón para continuar con la recuperación de tu contraseña.`,
-        "Reestablecer Contraseña",
+        "Recuperación de contraseña",
+        "Haz clic en el botón para recuperar tu acceso como emprendedor.",
+        "Restablecer",
         `${process.env.URL_FRONTEND}/reset/emprendedor/${token}`
     );
 
-    transporter.sendMail(
-        {
-            from: process.env.USER_MAILTRAP,
-            to: userMail,
-            subject: "Recuperación de Contraseña - Emprendedor",
-            html
-        },
-        (err) => err && console.error("❌ ERROR al enviar correo (recuperación emprendedor):", err)
-    );
+    // 👇 SOLO cambia el título del correo
+    return sendBrevoEmail(userMail, "Recuperación de Contraseña (Emprendedor)", html);
 };
 
-// -------------------------------
-// EXPORTS DEL MÓDULO EMPRENDEDOR
-// -------------------------------
 export {
     sendMailToRegisterEmprendedor,
     sendMailToRecoveryPasswordEmprendedor
