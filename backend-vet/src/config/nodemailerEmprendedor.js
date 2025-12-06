@@ -8,13 +8,17 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;font-family:'Segoe UI',sans-serif;color:#333;">
         <div style="background-color:#f9f9f9;">
-            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" style="width:100%;max-height:200px;object-fit:cover;">
+            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" 
+                 style="width:100%;max-height:200px;object-fit:cover;">
         </div>
         <div style="padding:25px;">
             <h1 style="color:#004080;font-size:24px;margin-top:0;">${title}</h1>
             <p style="font-size:16px;line-height:1.6;color:#555;">${message}</p>
             <div style="text-align:center;margin:30px 0;">
-                <a href="${buttonLink}" style="background-color:#007bff;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:600;">${buttonText}</a>
+                <a href="${buttonLink}" 
+                   style="background-color:#007bff;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:600;">
+                    ${buttonText}
+                </a>
             </div>
         </div>
     </div>`;
@@ -22,7 +26,6 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
 
 /**
  * ⭐ FUNCIÓN CENTRAL PARA ENVIAR CORREOS CON BREVO API
- * (LA MISMA DE CLIENTE)
  */
 async function sendBrevoEmail(to, subject, html) {
     try {
@@ -36,7 +39,7 @@ async function sendBrevoEmail(to, subject, html) {
             body: JSON.stringify({
                 sender: {
                     name: "QuitoEmprende",
-                    email: "izasebas96@gmail.com" // ✔ mismo sender verificado
+                    email: "izasebas96@gmail.com" // sender verificado
                 },
                 to: [{ email: to }],
                 subject,
@@ -65,7 +68,7 @@ const sendMailToRegisterEmprendedor = (userMail, token) => {
         `${process.env.URL_FRONTEND}/confirm/emprendedor/${token}`
     );
 
-    // 👇 SOLO cambia el título del correo
+    // SOLO cambia el título del correo
     return sendBrevoEmail(userMail, "Confirmación de Cuenta (Emprendedor)", html);
 };
 
@@ -80,7 +83,7 @@ const sendMailToRecoveryPasswordEmprendedor = (userMail, token) => {
         `${process.env.URL_FRONTEND}/reset/emprendedor/${token}`
     );
 
-    // 👇 SOLO cambia el título del correo
+    // SOLO cambia el título del correo
     return sendBrevoEmail(userMail, "Recuperación de Contraseña (Emprendedor)", html);
 };
 
