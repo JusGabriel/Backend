@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /**
- * PLANTILLA HTML
+ * 📌 PLANTILLA HTML
  */
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
@@ -21,7 +21,7 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
 };
 
 /**
- * ⭐ FUNCIÓN GLOBAL PARA ENVIAR CORREOS CON BREVO API
+ * ⭐ FUNCIÓN CENTRAL PARA ENVIAR CORREOS CON BREVO API
  */
 async function sendBrevoEmail(to, subject, html) {
     try {
@@ -38,20 +38,23 @@ async function sendBrevoEmail(to, subject, html) {
                     email: "no-reply@quitoemprende.com"
                 },
                 to: [{ email: to }],
-                subject: subject,
+                subject,
                 htmlContent: html
             })
         });
 
         const data = await response.json();
         console.log("📧 CORREO ENVIADO:", data);
+        return data;
+
     } catch (error) {
         console.error("❌ ERROR EN BREVO API:", error);
+        return null;
     }
 }
 
 /**
- * 📩 Enviar Correo de Confirmación (Administrador)
+ * 📩 Enviar correo de Confirmación (Administrador)
  */
 const sendMailToRegister = (userMail, token) => {
     const html = emailTemplate(
@@ -61,21 +64,27 @@ const sendMailToRegister = (userMail, token) => {
         `${process.env.URL_FRONTEND}/confirm/${token}`
     );
 
-    sendBrevoEmail(userMail, "Confirmación de Cuenta", html);
+    return sendBrevoEmail(userMail, "Confirmación de Cuenta", html);
 };
 
 /**
- * 📩 Enviar Correo de Recuperación de Contraseña (Administrador)
+ * 📩 Enviar correo de Recuperación de Contraseña (Administrador)
  */
 const sendMailToRecoveryPassword = (userMail, token) => {
     const html = emailTemplate(
-        "Reestablecer contraseña",
-        "Haz clic para cambiar tu contraseña.",
-        "Reestablecer",
+        "Restablecer contraseña",
+        "Haz clic en el botón para cambiar tu contraseña.",
+        "Restablecer",
         `${process.env.URL_FRONTEND}/reset/admin/${token}`
     );
 
-    sendBrevoEmail(userMail, "Recuperación de Contraseña", html);
+    return sendBrevoEmail(userMail, "Recuperación de contraseña", html);
 };
 
-export { sendMailToRegister, sendMailToRecoveryPassword };
+/**
+ * ⭐ EXPORTAR FUNCIONES (como siempre lo usas)
+ */
+export {
+    sendMailToRegister,
+    sendMailToRecoveryPassword
+};
