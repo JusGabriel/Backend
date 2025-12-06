@@ -35,7 +35,7 @@ async function sendBrevoEmail(to, subject, html) {
             body: JSON.stringify({
                 sender: {
                     name: "QuitoEmprende",
-                    email: "no-reply@quitoemprende.com"
+                    email: "izasebas96@gmail.com"   // ✔ SENDER VERIFICADO
                 },
                 to: [{ email: to }],
                 subject,
@@ -81,9 +81,6 @@ const sendMailToRecoveryPassword = (userMail, token) => {
     return sendBrevoEmail(userMail, "Recuperación de contraseña", html);
 };
 
-/**
- * ⭐ EXPORTAR FUNCIONES (como siempre lo usas)
- */
 export {
     sendMailToRegister,
     sendMailToRecoveryPassword
