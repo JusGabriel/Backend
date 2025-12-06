@@ -3,18 +3,20 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /**
- * TRANSPORTER GMAIL (FUNCIONAL)
+ * 🔵 CONFIG SMTP BREVO (OFICIAL 2025)
  */
 let transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: process.env.BREVO_SMTP_HOST,      // smtp-relay.brevo.com
+    port: process.env.BREVO_SMTP_PORT,      // 587
+    secure: false,                          // Brevo usa STARTTLS en 587
     auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS_APP, // contraseña de aplicación
+        user: process.env.BREVO_SMTP_USER,  // 9d7c04001@smtp-brevo.com
+        pass: process.env.BREVO_SMTP_PASS   // Clave SMTP generada
     }
 });
 
 /**
- * PLANTILLA HTML
+ * 🌐 PLANTILLA HTML
  */
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
@@ -33,7 +35,7 @@ const emailTemplate = (title, message, buttonText, buttonLink) => {
 };
 
 /**
- * 📩 Enviar Correo de Confirmación (Administrador)
+ * 📩 Enviar correo de Confirmación
  */
 const sendMailToRegister = (userMail, token) => {
     const html = emailTemplate(
@@ -45,7 +47,7 @@ const sendMailToRegister = (userMail, token) => {
 
     transporter.sendMail(
         {
-            from: process.env.GMAIL_USER,
+            from: `"QuitoEmprende" <${process.env.BREVO_SMTP_USER}>`, // 👈 Brevo exige que sea tu remitente verificado
             to: userMail,
             subject: "Confirmación de Cuenta",
             html
@@ -55,19 +57,19 @@ const sendMailToRegister = (userMail, token) => {
 };
 
 /**
- * 📩 Enviar Correo de Recuperación de Contraseña (Administrador)
+ * 📩 Enviar correo de recuperación
  */
 const sendMailToRecoveryPassword = (userMail, token) => {
     const html = emailTemplate(
-        "Reestablecer contraseña",
-        "Haz clic para cambiar tu contraseña.",
-        "Reestablecer",
+        "Restablecer Contraseña",
+        "Haz clic en el siguiente botón para cambiar tu contraseña.",
+        "Restablecer",
         `${process.env.URL_FRONTEND}/reset/admin/${token}`
     );
 
     transporter.sendMail(
         {
-            from: process.env.GMAIL_USER,
+            from: `"QuitoEmprende" <${process.env.BREVO_SMTP_USER}>`,
             to: userMail,
             subject: "Recuperación de Contraseña",
             html
