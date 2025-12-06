@@ -35,7 +35,7 @@ async function sendBrevoEmail(to, subject, html) {
             body: JSON.stringify({
                 sender: {
                     name: "QuitoEmprende",
-                    email: process.env.BREVO_SENDER_EMAIL   // ✔ SENDER VERIFICADO
+                    email: "izasebas96@gmail.com"   // ✔ SENDER VERIFICADO Y FUNCIONAL
                 },
                 to: [{ email: to }],
                 subject,
@@ -44,7 +44,7 @@ async function sendBrevoEmail(to, subject, html) {
         });
 
         const data = await response.json();
-        console.log("📧 CORREO ENVIADO (BREVO):", data);
+        console.log("📧 CORREO ENVIADO:", data);
         return data;
 
     } catch (error) {
@@ -64,7 +64,7 @@ const sendMailToRegisterCliente = (userMail, token) => {
         `${process.env.URL_FRONTEND}/confirm/${token}`
     );
 
-    return sendBrevoEmail(userMail, "Confirmación Cliente", html);
+    return sendBrevoEmail(userMail, "Confirmación de Cuenta (Cliente)", html);
 };
 
 /**
@@ -78,7 +78,7 @@ const sendMailToRecoveryPasswordCliente = (userMail, token) => {
         `${process.env.URL_FRONTEND}/reset/${token}`
     );
 
-    return sendBrevoEmail(userMail, "Recuperación de Contraseña", html);
+    return sendBrevoEmail(userMail, "Recuperación de Contraseña (Cliente)", html);
 };
 
 export {
