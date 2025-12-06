@@ -2,22 +2,77 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /**
- * 📌 PLANTILLA HTML
+ * 📌 PLANTILLA HTML (ACTUALIZADA CON LA NUEVA PRESENTACIÓN)
  */
 const emailTemplate = (title, message, buttonText, buttonLink) => {
     return `
-    <div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;font-family:'Segoe UI',sans-serif;color:#333;">
-        <div style="background-color:#f9f9f9;">
-            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg" style="width:100%;max-height:200px;object-fit:cover;">
-        </div>
-        <div style="padding:25px;">
-            <h1 style="color:#004080;font-size:24px;margin-top:0;">${title}</h1>
-            <p style="font-size:16px;line-height:1.6;color:#555;">${message}</p>
-            <div style="text-align:center;margin:30px 0;">
-                <a href="${buttonLink}" style="background-color:#007bff;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:600;">${buttonText}</a>
+    <!-- Preheader oculto para vista previa en bandeja -->
+    <span style="display:none !important; visibility:hidden; mso-hide:all; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0;">
+        ${title} — ${message}
+    </span>
+
+    <div style="width:100%;background:#f2f4f7;padding:30px 0;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+      <table align="center" role="presentation" cellspacing="0" cellpadding="0" border="0"
+             style="width:100%;max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e6e9ee;border-radius:12px;overflow:hidden;">
+        
+        <!-- Banner -->
+        <tr>
+          <td style="padding:0;background:#f9fbff;">
+            <img src="https://raw.githubusercontent.com/JusGabriel/Frontend/main/frontend-vet/src/assets/logo.jpg"
+                 alt="QuitoEmprende"
+                 style="display:block;width:100%;height:auto;max-height:200px;object-fit:cover;border-bottom:1px solid #eef2f6;">
+          </td>
+        </tr>
+
+        <!-- Contenido -->
+        <tr>
+          <td style="padding:28px 28px 18px 28px;color:#333;">
+            
+            <!-- Título -->
+            <h1 style="margin:0 0 12px 0;color:#004080;font-size:22px;line-height:1.2;font-weight:700;">
+              ${title}
+            </h1>
+
+            <!-- Texto -->
+            <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#556069;">
+              ${message}
+            </p>
+
+            <!-- Botón -->
+            <div style="text-align:center;margin:26px 0;">
+              <a href="${buttonLink}"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 style="display:inline-block;padding:12px 26px;border-radius:8px;background:#28a745;color:#ffffff;font-weight:700;text-decoration:none;font-size:15px;">
+                ${buttonText}
+              </a>
             </div>
-        </div>
-    </div>`;
+
+            <!-- Enlace alternativo -->
+            <p style="margin:0;font-size:13px;color:#9aa4ae;line-height:1.4;">
+              Si el botón no funciona, copia y pega este enlace en tu navegador:
+              <br>
+              <a href="${buttonLink}" style="color:#0077cc;word-break:break-all;text-decoration:none;">
+                ${buttonLink}
+              </a>
+            </p>
+
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:18px 28px 26px 28px;background:#f8fafc;border-top:1px solid #eef2f6;">
+            <p style="margin:0;font-size:13px;color:#9aa4ae;">
+              QuitoEmprende — Derechos reservados<br>
+              <span style="color:#b6c0c8;">Si no solicitaste este correo puedes ignorarlo.</span>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </div>
+    `;
 };
 
 /**
