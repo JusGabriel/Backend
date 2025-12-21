@@ -9,21 +9,24 @@ import routerClientes from './routers/cliente_routes.js';
 import routerEmprendedores from './routers/emprendedor_routes.js';
 import authRoutes from './routers/auth.js';
 import dotenv from 'dotenv';
-import mongoose from 'mongoose'; // 🔧 necesario para el endpoint nuevo
+import mongoose from 'mongoose';
 import Cliente from './models/Cliente.js';
 import Emprendedor from './models/Emprendedor.js';
 import chatRoutes from './routers/chatRoutes.js';
 import productoRoutes from './routers/productoRoutes.js';
-import quejaRoutes from './routers/quejaRoutes.js'
-import emprendimientoRoutes from './routers/emprendimientoRoutes.js'
-import favoritoRoutes from './routers/favoritoRoutes.js'
-import favoritosEmprendedorRoutes from './routers/favoritosEmprendedorRoutes.js'
+import quejaRoutes from './routers/quejaRoutes.js';
+import emprendimientoRoutes from './routers/emprendimientoRoutes.js';
+import favoritoRoutes from './routers/favoritoRoutes.js';
+import favoritosEmprendedorRoutes from './routers/favoritosEmprendedorRoutes.js';
+import path from 'path';
 
 dotenv.config();
 
 const app = express();
 
-//Sesión y Passport
+/* ==============================
+   SESIÓN Y PASSPORT
+================================ */
 app.use(session({
   secret: 'quitoemprende123',
   resave: false,
@@ -33,15 +36,34 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Middlewares
+/* ==============================
+   MIDDLEWARES GENERALES
+================================ */
 app.use(cors({
   origin: [process.env.URL_FRONTEND],
   credentials: true
 }));
+
+// 👉 Necesario para JSON
 app.use(express.json());
+
+// 👉 Útil para algunos formularios (no interfiere con multer)
+app.use(express.urlencoded({ extended: true }));
+
 app.use(morgan('dev'));
 
-// Serialización y deserialización
+/* ==============================
+   ARCHIVOS ESTÁTICOS (UPLOADS)
+================================ */
+// 🔥 CLAVE: permitir acceso público a imágenes subidas
+app.use(
+  '/uploads',
+  express.static(path.join(process.cwd(), 'uploads'))
+);
+
+/* ==============================
+   SERIALIZACIÓN PASSPORT
+================================ */
 passport.serializeUser((user, done) => {
   done(null, user._id);
 });
@@ -58,7 +80,9 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Estrategia Google para Cliente
+/* ==============================
+   GOOGLE STRATEGY - CLIENTE
+================================ */
 passport.use('google-cliente', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
@@ -95,7 +119,9 @@ passport.use('google-cliente', new GoogleStrategy({
   }
 }));
 
-// Estrategia Google para Emprendedor (✅ ACTUALIZADA)
+/* ==============================
+   GOOGLE STRATEGY - EMPRENDEDOR
+================================ */
 passport.use('google-emprendedor', new GoogleStrategy({
   clientID: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
@@ -132,31 +158,37 @@ passport.use('google-emprendedor', new GoogleStrategy({
   }
 }));
 
-// Usa el router auth para manejar rutas /auth/...
+/* ==============================
+   RUTAS
+================================ */
 app.use('/auth', authRoutes);
-
-// Rutas de administrador, clientes y emprendedores
 app.use('/api/administradores', adminRoutes);
 app.use('/api/clientes', routerClientes);
 app.use('/api/emprendedores', routerEmprendedores);
-app.use('/api/chat', chatRoutes)
+app.use('/api/chat', chatRoutes);
 app.use('/api/productos', productoRoutes);
-app.use('/api/quejas', quejaRoutes)
-app.use('/api/emprendimientos', emprendimientoRoutes)
-app.use('/api/favoritos', favoritoRoutes)
-app.use('/api/emprendedor/favoritos', favoritosEmprendedorRoutes)
+app.use('/api/quejas', quejaRoutes);
+app.use('/api/emprendimientos', emprendimientoRoutes);
+app.use('/api/favoritos', favoritoRoutes);
+app.use('/api/emprendedor/favoritos', favoritosEmprendedorRoutes);
 
-// ✅ Ruta temporal para eliminar el índice conflictivo
+/* ==============================
+   UTILIDADES / DEBUG
+================================ */
+// Ruta temporal para eliminar índice conflictivo
 app.get('/admin/delete-idGoogle-index', async (req, res) => {
   try {
-    const result = await mongoose.connection.db.collection('emprendedors').dropIndex('idGoogle_1');
+    const result = await mongoose.connection.db
+      .collection('emprendedors')
+      .dropIndex('idGoogle_1');
+
     res.send('✅ Índice idGoogle_1 eliminado correctamente: ' + JSON.stringify(result));
   } catch (error) {
     res.status(500).send('❌ Error al eliminar índice: ' + error.message);
   }
 });
 
-// Ruta para estado de sesión
+// Estado de sesión
 app.get('/api/status', (req, res) => {
   if (req.isAuthenticated()) {
     res.json({ usuario: req.user });
@@ -170,10 +202,9 @@ app.get('/', (req, res) => {
   res.send('🌐 API funcionando correctamente');
 });
 
-// Ruta no encontrada
+// 404
 app.use((req, res) => {
-  res.status(404).send("Endpoint no encontrado");
+  res.status(404).send('Endpoint no encontrado');
 });
 
 export default app;
-
