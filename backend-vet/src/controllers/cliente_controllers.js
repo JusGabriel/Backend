@@ -8,9 +8,9 @@ import {
 } from '../config/nodemailerCliente.js'
 import { crearTokenJWT } from '../middleware/JWT.js'
 
-// -----------------------------
-// Validaciones internas
-// -----------------------------
+// ============================
+// Funciones internas de validación
+// ============================
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || !/^[a-zA-Z\s]+$/.test(nombre.trim())) {
     return 'El nombre es obligatorio y solo puede contener letras y espacios'
@@ -29,12 +29,9 @@ function validarTelefono(telefono) {
   return null
 }
 
-const ESTADOS_PERMITIDOS = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
-const esAdvertenciaOSuspension = (e) => ['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)
-
-// -----------------------------
-// Registro / Confirmación / Recuperación
-// -----------------------------
+// ============================
+// Registro / confirmación / recuperación
+// ============================
 const registro = async (req, res) => {
   const { nombre, telefono, email, password } = req.body
   if (Object.values(req.body).includes('')) {
@@ -110,9 +107,9 @@ const crearNuevoPassword = async (req, res) => {
   res.status(200).json({ msg: 'Ya puedes iniciar sesión con tu nuevo password' })
 }
 
-// -----------------------------
+// ============================
 // Login
-// -----------------------------
+// ============================
 const login = async (req, res) => {
   const { email, password } = req.body
   if (Object.values(req.body).includes('')) {
@@ -121,47 +118,39 @@ const login = async (req, res) => {
   const clienteBDD = await Cliente.findOne({ email }).select('-__v -token -updatedAt -createdAt')
   if (!clienteBDD) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
   if (!clienteBDD.confirmEmail) return res.status(403).json({ msg: 'Debe verificar su cuenta' })
+
   const verificarPassword = await clienteBDD.matchPassword(password)
   if (!verificarPassword) return res.status(401).json({ msg: 'El password no es el correcto' })
 
   const { nombre, apellido, direccion, telefono, _id, rol } = clienteBDD
   const token = crearTokenJWT(clienteBDD._id, clienteBDD.rol)
   res.status(200).json({
-    token, rol, nombre, apellido, direccion, telefono, _id, email: clienteBDD.email
+    token,
+    rol,
+    nombre,
+    apellido,
+    direccion,
+    telefono,
+    _id,
+    email: clienteBDD.email,
   })
 }
 
-// -----------------------------
-// Listado — DECORADO para tu frontend (estado / estado_Cliente)
-// -----------------------------
+// ============================
+// Listado
+// ============================
 const verClientes = async (req, res) => {
   try {
-    const clientes = await Cliente.find().lean()
-
-    const decorados = clientes.map((c) => {
-      const estadoCalculado =
-        c.status === false
-          ? 'Inactivo'
-          : esAdvertenciaOSuspension(c.estado_Emprendedor)
-          ? c.estado_Emprendedor
-          : 'Activo'
-
-      return {
-        ...c,
-        estado: estadoCalculado,       // para tu badge/select
-        estado_Cliente: estadoCalculado // tu front lo lee también
-      }
-    })
-
-    res.status(200).json(decorados)
+    const clientes = await Cliente.find()
+    res.status(200).json(clientes)
   } catch (error) {
     res.status(500).json({ msg: 'Error al obtener los clientes' })
   }
 }
 
-// -----------------------------
-// Actualizar datos (ACEPTA estado como fallback del front)
-// -----------------------------
+// ============================
+// Actualizar datos (perfil)
+// ============================
 const actualizarCliente = async (req, res) => {
   const { id } = req.params
 
@@ -169,21 +158,22 @@ const actualizarCliente = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    const {
-      nombre, apellido, email, password, telefono,
-      // Fallbacks que tu front puede enviar
-      estado, estado_Cliente, status
-    } = req.body
+    const { nombre, apellido, email, password, telefono } = req.body
 
-    // Validaciones si se envía nombre/telefono
+    // Validaciones solo si se envía nombre o telefono para actualizar
     if (nombre) {
       const errorNombre = validarNombre(nombre)
-      if (errorNombre) return res.status(400).json({ msg: errorNombre })
+      if (errorNombre) {
+        return res.status(400).json({ msg: errorNombre })
+      }
       cliente.nombre = nombre
     }
+
     if (telefono) {
       const errorTelefono = validarTelefono(telefono)
-      if (errorTelefono) return res.status(400).json({ msg: errorTelefono })
+      if (errorTelefono) {
+        return res.status(400).json({ msg: errorTelefono })
+      }
       cliente.telefono = telefono
     }
 
@@ -191,54 +181,16 @@ const actualizarCliente = async (req, res) => {
     if (email) cliente.email = email
     if (password) cliente.password = await cliente.encrypPassword(password)
 
-    // -------- Fallback de estado desde actualizar/:id --------
-    const nuevoEstado = estado ?? estado_Cliente
-
-    if (typeof status === 'boolean') {
-      cliente.status = status
-      if (status === true && !esAdvertenciaOSuspension(cliente.estado_Emprendedor)) {
-        cliente.estado_Emprendedor = 'Activo'
-      }
-    }
-
-    if (nuevoEstado) {
-      if (nuevoEstado === 'Inactivo') {
-        cliente.status = false
-      } else if (nuevoEstado === 'Activo') {
-        cliente.status = true
-        cliente.estado_Emprendedor = 'Activo'
-      } else if (ESTADOS_PERMITIDOS.includes(nuevoEstado)) {
-        cliente.estado_Emprendedor = nuevoEstado
-        if (nuevoEstado === 'Suspendido') cliente.status = false // regla opcional
-      } else {
-        return res.status(400).json({
-          msg: `Estado inválido. Permitidos: Inactivo, Activo, ${ESTADOS_PERMITIDOS.join(', ')}`
-        })
-      }
-    }
-
     const actualizado = await cliente.save()
-
-    const estadoCalculado =
-      actualizado.status === false
-        ? 'Inactivo'
-        : esAdvertenciaOSuspension(actualizado.estado_Emprendedor)
-        ? actualizado.estado_Emprendedor
-        : 'Activo'
-
-    res.status(200).json({
-      ...actualizado.toObject(),
-      estado: estadoCalculado,
-      estado_Cliente: estadoCalculado
-    })
+    res.status(200).json(actualizado)
   } catch (error) {
     res.status(500).json({ msg: 'Error al actualizar cliente' })
   }
 }
 
-// -----------------------------
+// ============================
 // Eliminar
-// -----------------------------
+// ============================
 const eliminarCliente = async (req, res) => {
   const { id } = req.params
   try {
@@ -251,32 +203,27 @@ const eliminarCliente = async (req, res) => {
   }
 }
 
-// -----------------------------
-// Perfil / Password
-// -----------------------------
+// ============================
+// Perfil
+// ============================
 const perfil = (req, res) => {
   const { token, confirmEmail, createdAt, updatedAt, __v, password, ...datosPerfil } = req.clienteBDD
-
-  const estadoCalculado =
-    datosPerfil.status === false
-      ? 'Inactivo'
-      : esAdvertenciaOSuspension(datosPerfil.estado_Emprendedor)
-      ? datosPerfil.estado_Emprendedor
-      : 'Activo'
-
-  res.status(200).json({
-    ...datosPerfil,
-    estado: estadoCalculado,
-    estado_Cliente: estadoCalculado
-  })
+  res.status(200).json(datosPerfil)
 }
 
+// ============================
+// Actualizar password
+// ============================
 const actualizarPassword = async (req, res) => {
   try {
     const clienteBDD = await Cliente.findById(req.clienteBDD._id)
-    if (!clienteBDD) return res.status(404).json({ msg: 'No existe el cliente' })
+    if (!clienteBDD) {
+      return res.status(404).json({ msg: 'No existe el cliente' })
+    }
     const verificarPassword = await clienteBDD.matchPassword(req.body.passwordactual)
-    if (!verificarPassword) return res.status(400).json({ msg: 'El password actual no es correcto' })
+    if (!verificarPassword) {
+      return res.status(400).json({ msg: 'El password actual no es correcto' })
+    }
     clienteBDD.password = await clienteBDD.encrypPassword(req.body.passwordnuevo)
     await clienteBDD.save()
     res.status(200).json({ msg: 'Password actualizado correctamente' })
@@ -285,12 +232,59 @@ const actualizarPassword = async (req, res) => {
   }
 }
 
-// -----------------------------
-// *** NUEVO *** Cambiar estado por ID (ruta exacta que usa tu front)
-// PUT /api/clientes/estado/:id
-// Body: { estado_Cliente: 'Activo|Inactivo|AdvertenciaX|Suspendido', estado: '...' }
-// -----------------------------
-const actualizarEstadoClienteById = async (req, res) => {
+// ============================
+// Actualizar perfil (con ID)
+// ============================
+const actualizarPerfil = async (req, res) => {
+  const { id } = req.params
+  const { nombre, apellido, telefono, email } = req.body
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: 'El ID no es válido' })
+  }
+  if (Object.values(req.body).includes('')) {
+    return res.status(400).json({ msg: 'Debes llenar todos los campos' })
+  }
+
+  // Validaciones
+  const errorNombre = validarNombre(nombre)
+  if (errorNombre) {
+    return res.status(400).json({ msg: errorNombre })
+  }
+
+  const errorTelefono = validarTelefono(telefono)
+  if (errorTelefono) {
+    return res.status(400).json({ msg: errorTelefono })
+  }
+
+  const clienteBDD = await Cliente.findById(id)
+  if (!clienteBDD) {
+    return res.status(404).json({ msg: `No existe el cliente con ID ${id}` })
+  }
+  if (clienteBDD.email !== email) {
+    const clienteBDDMail = await Cliente.findOne({ email })
+    if (clienteBDDMail) {
+      return res.status(400).json({ msg: 'El email ya se encuentra registrado' })
+    }
+  }
+  clienteBDD.nombre = nombre ?? clienteBDD.nombre
+  clienteBDD.apellido = apellido ?? clienteBDD.apellido
+  clienteBDD.telefono = telefono ?? clienteBDD.telefono
+  clienteBDD.email = email ?? clienteBDD.email
+  await clienteBDD.save()
+  res.status(200).json(clienteBDD)
+}
+
+// ============================
+// *** NUEVO *** Editar estado por ID
+//     Ruta: PUT /api/clientes/estado/:id
+//     Body admitido (usa cualquiera):
+//       - { estado: 'Activo|Inactivo|Advertencia1|Advertencia2|Advertencia3|Suspendido' }
+//       - { estado_Cliente: '...' }
+// ============================
+const ESTADOS_PERMITIDOS = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
+
+export const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(404).json({ msg: 'El ID no es válido' })
@@ -313,7 +307,7 @@ const actualizarEstadoClienteById = async (req, res) => {
       cliente.estado_Emprendedor = 'Activo'
     } else if (ESTADOS_PERMITIDOS.includes(nuevoEstado)) {
       cliente.estado_Emprendedor = nuevoEstado
-      if (nuevoEstado === 'Suspendido') cliente.status = false // opcional
+      if (nuevoEstado === 'Suspendido') cliente.status = false // opcional: suspender = inactivar
     } else {
       return res.status(400).json({
         msg: `Estado inválido. Permitidos: Inactivo, Activo, ${ESTADOS_PERMITIDOS.join(', ')}`
@@ -322,89 +316,19 @@ const actualizarEstadoClienteById = async (req, res) => {
 
     await cliente.save()
 
-    const estadoCalculado =
-      cliente.status === false
-        ? 'Inactivo'
-        : esAdvertenciaOSuspension(cliente.estado_Emprendedor)
-        ? cliente.estado_Emprendedor
-        : 'Activo'
-
     return res.status(200).json({
       msg: 'Estado actualizado correctamente',
       estado_Emprendedor: cliente.estado_Emprendedor,
-      status: cliente.status,
-      estado: estadoCalculado,
-      estado_Cliente: estadoCalculado
+      status: cliente.status
     })
   } catch (error) {
     return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
   }
 }
 
-// -----------------------------
-// Favoritos (sin cambios)
-// -----------------------------
-export const agregarAFavoritos = async (req, res) => {
-  const clienteId = req.clienteBDD?._id
-  const { emprendimientoId } = req.body
-
-  try {
-    const cliente = await Cliente.findById(clienteId)
-    const emprendimiento = await Emprendimiento.findById(emprendimientoId)
-
-    if (!emprendimiento) {
-      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' })
-    }
-
-    if (cliente.favoritos.includes(emprendimientoId)) {
-      return res.status(400).json({ mensaje: 'Ya está en favoritos' })
-    }
-
-    cliente.favoritos.push(emprendimientoId)
-    await cliente.save()
-
-    res.json({ mensaje: 'Agregado a favoritos correctamente' })
-  } catch (error) {
-    res.status(500).json({ mensaje: 'Error al agregar a favoritos', error: error.message })
-  }
-}
-
-export const eliminarDeFavoritos = async (req, res) => {
-  const clienteId = req.clienteBDD?._id
-  const { emprendimientoId } = req.params
-
-  try {
-    const cliente = await Cliente.findById(clienteId)
-    cliente.favoritos = cliente.favoritos.filter(id => id.toString() !== emprendimientoId)
-    await cliente.save()
-    res.json({ mensaje: 'Eliminado de favoritos correctamente' })
-  } catch (error) {
-    res.status(500).json({ mensaje: 'Error al eliminar de favoritos', error: error.message })
-  }
-}
-
-export const obtenerFavoritos = async (req, res) => {
-  const clienteId = req.clienteBDD?._id
-
-  try {
-    const cliente = await Cliente.findById(clienteId)
-      .populate({
-        path: 'favoritos',
-        populate: {
-          path: 'emprendedor',
-          select: 'nombre apellido'
-        }
-      })
-
-    res.json(cliente.favoritos)
-  } catch (error) {
-    res.status(500).json({ mensaje: 'Error al obtener favoritos', error: error.message })
-  }
-}
-
-// -----------------------------
+// ============================
 // Exports
-// -----------------------------
+// ============================
 export {
   registro,
   confirmarMail,
@@ -418,5 +342,5 @@ export {
   perfil,
   actualizarPassword,
   actualizarPerfil,
-  actualizarEstadoClienteById // <-- IMPORTANTE para /estado/:id
+  actualizarEstadoClienteById // <-- EXPORTAR NUEVA FUNCIÓN
 }
