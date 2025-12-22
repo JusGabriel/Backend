@@ -20,6 +20,9 @@ import favoritoRoutes from './routers/favoritoRoutes.js';
 import favoritosEmprendedorRoutes from './routers/favoritosEmprendedorRoutes.js';
 import path from 'path';
 
+// 👉 NUEVO: importa el router del buscador
+import searchRoutes from './routers/search_routes.js';
+
 dotenv.config();
 
 const app = express();
@@ -44,10 +47,8 @@ app.use(cors({
   credentials: true
 }));
 
-// 👉 Necesario para JSON
+// Necesario para JSON y formularios
 app.use(express.json());
-
-// 👉 Útil para algunos formularios (no interfiere con multer)
 app.use(express.urlencoded({ extended: true }));
 
 app.use(morgan('dev'));
@@ -55,7 +56,6 @@ app.use(morgan('dev'));
 /* ==============================
    ARCHIVOS ESTÁTICOS (UPLOADS)
 ================================ */
-// 🔥 CLAVE: permitir acceso público a imágenes subidas
 app.use(
   '/uploads',
   express.static(path.join(process.cwd(), 'uploads'))
@@ -172,10 +172,18 @@ app.use('/api/emprendimientos', emprendimientoRoutes);
 app.use('/api/favoritos', favoritoRoutes);
 app.use('/api/emprendedor/favoritos', favoritosEmprendedorRoutes);
 
+// 👉 NUEVO: monta el router del buscador
+//     Esto expone:
+//       GET /api/search
+//       GET /api/search/suggest
+//       GET /api/productos/search
+//       GET /api/emprendimientos/search
+//       GET /api/emprendedores/search
+app.use('/api', searchRoutes);
+
 /* ==============================
    UTILIDADES / DEBUG
 ================================ */
-// Ruta temporal para eliminar índice conflictivo
 app.get('/admin/delete-idGoogle-index', async (req, res) => {
   try {
     const result = await mongoose.connection.db
@@ -202,7 +210,7 @@ app.get('/', (req, res) => {
   res.send('🌐 API funcionando correctamente');
 });
 
-// 404
+// 404 (debe ir al final)
 app.use((req, res) => {
   res.status(404).send('Endpoint no encontrado');
 });
