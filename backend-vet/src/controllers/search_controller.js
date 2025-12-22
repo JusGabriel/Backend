@@ -1,5 +1,5 @@
 // controllers/search_controller.js
-import Producto from '../models/Producto.js';
+import Producto from '../models/Productos.js';
 import Emprendimiento from '../models/Emprendimiento.js';
 import Emprendedor from '../models/Emprendedor.js';
 
