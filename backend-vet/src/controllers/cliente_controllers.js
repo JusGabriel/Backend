@@ -1,264 +1,349 @@
-import Cliente from '../models/Cliente.js';
+// controllers/cliente_controllers.js
+import Cliente from '../models/Cliente.js'
 import Emprendimiento from '../models/Emprendimiento.js'
-
-import mongoose from 'mongoose';
+import mongoose from 'mongoose'
 import {
   sendMailToRegisterCliente,
   sendMailToRecoveryPasswordCliente,
-} from '../config/nodemailerCliente.js';
-import { crearTokenJWT } from '../middleware/JWT.js';
+} from '../config/nodemailerCliente.js'
+import { crearTokenJWT } from '../middleware/JWT.js'
 
-// Funciones internas para validación
+// -----------------------------
+// Validaciones internas
+// -----------------------------
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || !/^[a-zA-Z\s]+$/.test(nombre.trim())) {
-    return 'El nombre es obligatorio y solo puede contener letras y espacios';
+    return 'El nombre es obligatorio y solo puede contener letras y espacios'
   }
-  return null;
+  return null
 }
 
 function validarTelefono(telefono) {
   if (!telefono || (typeof telefono !== 'string' && typeof telefono !== 'number')) {
-    return 'El teléfono es obligatorio y debe ser un número';
+    return 'El teléfono es obligatorio y debe ser un número'
   }
-  const telefonoStr = telefono.toString();
+  const telefonoStr = telefono.toString()
   if (!/^\d{7,15}$/.test(telefonoStr)) {
-    return 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos';
+    return 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos'
   }
-  return null;
+  return null
 }
 
+const ESTADOS_PERMITIDOS = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
+const esAdvertenciaOSuspension = (e) => ['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)
+
+// -----------------------------
+// Registro / Confirmación / Recuperación
+// -----------------------------
 const registro = async (req, res) => {
-  const { nombre, telefono, email, password } = req.body;
+  const { nombre, telefono, email, password } = req.body
   if (Object.values(req.body).includes('')) {
-    return res.status(400).json({ msg: 'Todos los campos son obligatorios' });
+    return res.status(400).json({ msg: 'Todos los campos son obligatorios' })
   }
 
-  // Validaciones
-  const errorNombre = validarNombre(nombre);
-  if (errorNombre) {
-    return res.status(400).json({ msg: errorNombre });
-  }
+  const errorNombre = validarNombre(nombre)
+  if (errorNombre) return res.status(400).json({ msg: errorNombre })
 
-  const errorTelefono = validarTelefono(telefono);
-  if (errorTelefono) {
-    return res.status(400).json({ msg: errorTelefono });
-  }
+  const errorTelefono = validarTelefono(telefono)
+  if (errorTelefono) return res.status(400).json({ msg: errorTelefono })
 
-  const existe = await Cliente.findOne({ email });
-  if (existe) {
-    return res.status(400).json({ msg: 'Este email ya está registrado' });
-  }
-  const nuevoCliente = new Cliente(req.body);
-  nuevoCliente.password = await nuevoCliente.encrypPassword(password);
-  const token = nuevoCliente.crearToken();
-  await sendMailToRegisterCliente(email, token);
-  await nuevoCliente.save();
-  res.status(200).json({ msg: 'Revisa tu correo electrónico para confirmar tu cuenta' });
-};
+  const existe = await Cliente.findOne({ email })
+  if (existe) return res.status(400).json({ msg: 'Este email ya está registrado' })
+
+  const nuevoCliente = new Cliente(req.body)
+  nuevoCliente.password = await nuevoCliente.encrypPassword(password)
+  const token = nuevoCliente.crearToken()
+  await sendMailToRegisterCliente(email, token)
+  await nuevoCliente.save()
+  res.status(200).json({ msg: 'Revisa tu correo electrónico para confirmar tu cuenta' })
+}
 
 const confirmarMail = async (req, res) => {
-  const { token } = req.params;
-  const clienteBDD = await Cliente.findOne({ token });
-  if (!clienteBDD) return res.status(404).json({ msg: 'Token inválido' });
-  clienteBDD.token = null;
-  clienteBDD.confirmEmail = true;
-  await clienteBDD.save();
-  res.status(200).json({ msg: 'Cuenta confirmada correctamente' });
-};
+  const { token } = req.params
+  const clienteBDD = await Cliente.findOne({ token })
+  if (!clienteBDD) return res.status(404).json({ msg: 'Token inválido' })
+  clienteBDD.token = null
+  clienteBDD.confirmEmail = true
+  await clienteBDD.save()
+  res.status(200).json({ msg: 'Cuenta confirmada correctamente' })
+}
 
 const recuperarPassword = async (req, res) => {
-  const { email } = req.body;
+  const { email } = req.body
   if (Object.values(req.body).includes('')) {
-    return res.status(400).json({ msg: 'Debes llenar todos los campos' });
+    return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
-  const clienteBDD = await Cliente.findOne({ email });
-  if (!clienteBDD) {
-    return res.status(404).json({ msg: 'El usuario no se encuentra registrado' });
-  }
-  const token = clienteBDD.crearToken();
-  clienteBDD.token = token;
-  await sendMailToRecoveryPasswordCliente(email, token);
-  await clienteBDD.save();
-  res.status(200).json({ msg: 'Revisa tu correo electrónico para reestablecer tu cuenta' });
-};
+  const clienteBDD = await Cliente.findOne({ email })
+  if (!clienteBDD) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
+
+  const token = clienteBDD.crearToken()
+  clienteBDD.token = token
+  await sendMailToRecoveryPasswordCliente(email, token)
+  await clienteBDD.save()
+  res.status(200).json({ msg: 'Revisa tu correo electrónico para reestablecer tu cuenta' })
+}
 
 const comprobarTokenPasword = async (req, res) => {
-  const { token } = req.params;
-  const clienteBDD = await Cliente.findOne({ token });
+  const { token } = req.params
+  const clienteBDD = await Cliente.findOne({ token })
   if (clienteBDD?.token !== token) {
-    return res.status(404).json({ msg: 'No se puede validar la cuenta' });
+    return res.status(404).json({ msg: 'No se puede validar la cuenta' })
   }
-  res.status(200).json({ msg: 'Token confirmado, ya puedes crear tu nuevo password' });
-};
+  res.status(200).json({ msg: 'Token confirmado, ya puedes crear tu nuevo password' })
+}
 
 const crearNuevoPassword = async (req, res) => {
-  const { password, confirmpassword } = req.body;
+  const { password, confirmpassword } = req.body
   if (Object.values(req.body).includes('')) {
-    return res.status(400).json({ msg: 'Debes llenar todos los campos' });
+    return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
   if (password !== confirmpassword) {
-    return res.status(400).json({ msg: 'Los passwords no coinciden' });
+    return res.status(400).json({ msg: 'Los passwords no coinciden' })
   }
-  const clienteBDD = await Cliente.findOne({ token: req.params.token });
+  const clienteBDD = await Cliente.findOne({ token: req.params.token })
   if (clienteBDD?.token !== req.params.token) {
-    return res.status(404).json({ msg: 'No se puede validar la cuenta' });
+    return res.status(404).json({ msg: 'No se puede validar la cuenta' })
   }
-  clienteBDD.token = null;
-  clienteBDD.password = await clienteBDD.encrypPassword(password);
-  await clienteBDD.save();
-  res.status(200).json({ msg: 'Ya puedes iniciar sesión con tu nuevo password' });
-};
+  clienteBDD.token = null
+  clienteBDD.password = await clienteBDD.encrypPassword(password)
+  await clienteBDD.save()
+  res.status(200).json({ msg: 'Ya puedes iniciar sesión con tu nuevo password' })
+}
 
+// -----------------------------
+// Login
+// -----------------------------
 const login = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body
   if (Object.values(req.body).includes('')) {
-    return res.status(400).json({ msg: 'Debes llenar todos los campos' });
+    return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
-  const clienteBDD = await Cliente.findOne({ email }).select('-__v -token -updatedAt -createdAt');
-  if (!clienteBDD) {
-    return res.status(404).json({ msg: 'El usuario no se encuentra registrado' });
-  }
-  if (!clienteBDD.confirmEmail) {
-    return res.status(403).json({ msg: 'Debe verificar su cuenta' });
-  }
-  const verificarPassword = await clienteBDD.matchPassword(password);
-  if (!verificarPassword) {
-    return res.status(401).json({ msg: 'El password no es el correcto' });
-  }
-  const { nombre, apellido, direccion, telefono, _id, rol } = clienteBDD;
-  const token = crearTokenJWT(clienteBDD._id, clienteBDD.rol);
-  res.status(200).json({
-    token,
-    rol,
-    nombre,
-    apellido,
-    direccion,
-    telefono,
-    _id,
-    email: clienteBDD.email,
-  });
-};
+  const clienteBDD = await Cliente.findOne({ email }).select('-__v -token -updatedAt -createdAt')
+  if (!clienteBDD) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
+  if (!clienteBDD.confirmEmail) return res.status(403).json({ msg: 'Debe verificar su cuenta' })
+  const verificarPassword = await clienteBDD.matchPassword(password)
+  if (!verificarPassword) return res.status(401).json({ msg: 'El password no es el correcto' })
 
+  const { nombre, apellido, direccion, telefono, _id, rol } = clienteBDD
+  const token = crearTokenJWT(clienteBDD._id, clienteBDD.rol)
+  res.status(200).json({
+    token, rol, nombre, apellido, direccion, telefono, _id, email: clienteBDD.email
+  })
+}
+
+// -----------------------------
+// Listado — DECORADO para tu frontend (estado / estado_Cliente)
+// -----------------------------
 const verClientes = async (req, res) => {
   try {
-    const clientes = await Cliente.find();
-    res.status(200).json(clientes);
-  } catch (error) {
-    res.status(500).json({ msg: 'Error al obtener los clientes' });
-  }
-};
+    const clientes = await Cliente.find().lean()
 
+    const decorados = clientes.map((c) => {
+      const estadoCalculado =
+        c.status === false
+          ? 'Inactivo'
+          : esAdvertenciaOSuspension(c.estado_Emprendedor)
+          ? c.estado_Emprendedor
+          : 'Activo'
+
+      return {
+        ...c,
+        estado: estadoCalculado,       // para tu badge/select
+        estado_Cliente: estadoCalculado // tu front lo lee también
+      }
+    })
+
+    res.status(200).json(decorados)
+  } catch (error) {
+    res.status(500).json({ msg: 'Error al obtener los clientes' })
+  }
+}
+
+// -----------------------------
+// Actualizar datos (ACEPTA estado como fallback del front)
+// -----------------------------
 const actualizarCliente = async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.params
 
   try {
-    const cliente = await Cliente.findById(id);
-    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' });
+    const cliente = await Cliente.findById(id)
+    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    const { nombre, apellido, email, password, telefono } = req.body;
+    const {
+      nombre, apellido, email, password, telefono,
+      // Fallbacks que tu front puede enviar
+      estado, estado_Cliente, status
+    } = req.body
 
-    // Validaciones solo si se envía nombre o telefono para actualizar
+    // Validaciones si se envía nombre/telefono
     if (nombre) {
-      const errorNombre = validarNombre(nombre);
-      if (errorNombre) {
-        return res.status(400).json({ msg: errorNombre });
-      }
-      cliente.nombre = nombre;
+      const errorNombre = validarNombre(nombre)
+      if (errorNombre) return res.status(400).json({ msg: errorNombre })
+      cliente.nombre = nombre
     }
-
     if (telefono) {
-      const errorTelefono = validarTelefono(telefono);
-      if (errorTelefono) {
-        return res.status(400).json({ msg: errorTelefono });
-      }
-      cliente.telefono = telefono;
+      const errorTelefono = validarTelefono(telefono)
+      if (errorTelefono) return res.status(400).json({ msg: errorTelefono })
+      cliente.telefono = telefono
     }
 
-    if (apellido) cliente.apellido = apellido;
-    if (email) cliente.email = email;
-    if (password) cliente.password = await cliente.encrypPassword(password);
+    if (apellido) cliente.apellido = apellido
+    if (email) cliente.email = email
+    if (password) cliente.password = await cliente.encrypPassword(password)
 
-    const actualizado = await cliente.save();
-    res.status(200).json(actualizado);
+    // -------- Fallback de estado desde actualizar/:id --------
+    const nuevoEstado = estado ?? estado_Cliente
+
+    if (typeof status === 'boolean') {
+      cliente.status = status
+      if (status === true && !esAdvertenciaOSuspension(cliente.estado_Emprendedor)) {
+        cliente.estado_Emprendedor = 'Activo'
+      }
+    }
+
+    if (nuevoEstado) {
+      if (nuevoEstado === 'Inactivo') {
+        cliente.status = false
+      } else if (nuevoEstado === 'Activo') {
+        cliente.status = true
+        cliente.estado_Emprendedor = 'Activo'
+      } else if (ESTADOS_PERMITIDOS.includes(nuevoEstado)) {
+        cliente.estado_Emprendedor = nuevoEstado
+        if (nuevoEstado === 'Suspendido') cliente.status = false // regla opcional
+      } else {
+        return res.status(400).json({
+          msg: `Estado inválido. Permitidos: Inactivo, Activo, ${ESTADOS_PERMITIDOS.join(', ')}`
+        })
+      }
+    }
+
+    const actualizado = await cliente.save()
+
+    const estadoCalculado =
+      actualizado.status === false
+        ? 'Inactivo'
+        : esAdvertenciaOSuspension(actualizado.estado_Emprendedor)
+        ? actualizado.estado_Emprendedor
+        : 'Activo'
+
+    res.status(200).json({
+      ...actualizado.toObject(),
+      estado: estadoCalculado,
+      estado_Cliente: estadoCalculado
+    })
   } catch (error) {
-    res.status(500).json({ msg: 'Error al actualizar cliente' });
+    res.status(500).json({ msg: 'Error al actualizar cliente' })
   }
-};
+}
 
+// -----------------------------
+// Eliminar
+// -----------------------------
 const eliminarCliente = async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.params
   try {
-    const cliente = await Cliente.findById(id);
-    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' });
-    await cliente.deleteOne();
-    res.status(200).json({ msg: 'Cliente eliminado correctamente' });
+    const cliente = await Cliente.findById(id)
+    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
+    await cliente.deleteOne()
+    res.status(200).json({ msg: 'Cliente eliminado correctamente' })
   } catch (error) {
-    res.status(500).json({ msg: 'Error al eliminar cliente' });
+    res.status(500).json({ msg: 'Error al eliminar cliente' })
   }
-};
+}
 
+// -----------------------------
+// Perfil / Password
+// -----------------------------
 const perfil = (req, res) => {
-  const { token, confirmEmail, createdAt, updatedAt, __v, password, ...datosPerfil } = req.clienteBDD;
-  res.status(200).json(datosPerfil);
-};
+  const { token, confirmEmail, createdAt, updatedAt, __v, password, ...datosPerfil } = req.clienteBDD
+
+  const estadoCalculado =
+    datosPerfil.status === false
+      ? 'Inactivo'
+      : esAdvertenciaOSuspension(datosPerfil.estado_Emprendedor)
+      ? datosPerfil.estado_Emprendedor
+      : 'Activo'
+
+  res.status(200).json({
+    ...datosPerfil,
+    estado: estadoCalculado,
+    estado_Cliente: estadoCalculado
+  })
+}
 
 const actualizarPassword = async (req, res) => {
   try {
-    const clienteBDD = await Cliente.findById(req.clienteBDD._id);
-    if (!clienteBDD) {
-      return res.status(404).json({ msg: 'No existe el cliente' });
-    }
-    const verificarPassword = await clienteBDD.matchPassword(req.body.passwordactual);
-    if (!verificarPassword) {
-      return res.status(400).json({ msg: 'El password actual no es correcto' });
-    }
-    clienteBDD.password = await clienteBDD.encrypPassword(req.body.passwordnuevo);
-    await clienteBDD.save();
-    res.status(200).json({ msg: 'Password actualizado correctamente' });
+    const clienteBDD = await Cliente.findById(req.clienteBDD._id)
+    if (!clienteBDD) return res.status(404).json({ msg: 'No existe el cliente' })
+    const verificarPassword = await clienteBDD.matchPassword(req.body.passwordactual)
+    if (!verificarPassword) return res.status(400).json({ msg: 'El password actual no es correcto' })
+    clienteBDD.password = await clienteBDD.encrypPassword(req.body.passwordnuevo)
+    await clienteBDD.save()
+    res.status(200).json({ msg: 'Password actualizado correctamente' })
   } catch (error) {
-    res.status(500).json({ msg: 'Error al actualizar el password' });
+    res.status(500).json({ msg: 'Error al actualizar el password' })
   }
-};
+}
 
-const actualizarPerfil = async (req, res) => {
-  const { id } = req.params;
-  const { nombre, apellido, telefono, email } = req.body;
+// -----------------------------
+// *** NUEVO *** Cambiar estado por ID (ruta exacta que usa tu front)
+// PUT /api/clientes/estado/:id
+// Body: { estado_Cliente: 'Activo|Inactivo|AdvertenciaX|Suspendido', estado: '...' }
+// -----------------------------
+const actualizarEstadoClienteById = async (req, res) => {
+  const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(404).json({ msg: 'El ID no es válido' });
-  }
-  if (Object.values(req.body).includes('')) {
-    return res.status(400).json({ msg: 'Debes llenar todos los campos' });
+    return res.status(404).json({ msg: 'El ID no es válido' })
   }
 
-  // Validaciones
-  const errorNombre = validarNombre(nombre);
-  if (errorNombre) {
-    return res.status(400).json({ msg: errorNombre });
+  const { estado, estado_Cliente } = req.body
+  const nuevoEstado = estado ?? estado_Cliente
+  if (!nuevoEstado) {
+    return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
   }
 
-  const errorTelefono = validarTelefono(telefono);
-  if (errorTelefono) {
-    return res.status(400).json({ msg: errorTelefono });
-  }
+  try {
+    const cliente = await Cliente.findById(id)
+    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-  const clienteBDD = await Cliente.findById(id);
-  if (!clienteBDD) {
-    return res.status(404).json({ msg: `No existe el cliente con ID ${id}` });
-  }
-  if (clienteBDD.email !== email) {
-    const clienteBDDMail = await Cliente.findOne({ email });
-    if (clienteBDDMail) {
-      return res.status(400).json({ msg: 'El email ya se encuentra registrado' });
+    if (nuevoEstado === 'Inactivo') {
+      cliente.status = false
+    } else if (nuevoEstado === 'Activo') {
+      cliente.status = true
+      cliente.estado_Emprendedor = 'Activo'
+    } else if (ESTADOS_PERMITIDOS.includes(nuevoEstado)) {
+      cliente.estado_Emprendedor = nuevoEstado
+      if (nuevoEstado === 'Suspendido') cliente.status = false // opcional
+    } else {
+      return res.status(400).json({
+        msg: `Estado inválido. Permitidos: Inactivo, Activo, ${ESTADOS_PERMITIDOS.join(', ')}`
+      })
     }
+
+    await cliente.save()
+
+    const estadoCalculado =
+      cliente.status === false
+        ? 'Inactivo'
+        : esAdvertenciaOSuspension(cliente.estado_Emprendedor)
+        ? cliente.estado_Emprendedor
+        : 'Activo'
+
+    return res.status(200).json({
+      msg: 'Estado actualizado correctamente',
+      estado_Emprendedor: cliente.estado_Emprendedor,
+      status: cliente.status,
+      estado: estadoCalculado,
+      estado_Cliente: estadoCalculado
+    })
+  } catch (error) {
+    return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
   }
-  clienteBDD.nombre = nombre ?? clienteBDD.nombre;
-  clienteBDD.apellido = apellido ?? clienteBDD.apellido;
-  clienteBDD.telefono = telefono ?? clienteBDD.telefono;
-  clienteBDD.email = email ?? clienteBDD.email;
-  await clienteBDD.save();
-  res.status(200).json(clienteBDD);
-};
-// Agregar emprendimiento a favoritos
+}
+
+// -----------------------------
+// Favoritos (sin cambios)
+// -----------------------------
 export const agregarAFavoritos = async (req, res) => {
   const clienteId = req.clienteBDD?._id
   const { emprendimientoId } = req.body
@@ -271,7 +356,6 @@ export const agregarAFavoritos = async (req, res) => {
       return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' })
     }
 
-    // Verificar si ya está en favoritos
     if (cliente.favoritos.includes(emprendimientoId)) {
       return res.status(400).json({ mensaje: 'Ya está en favoritos' })
     }
@@ -285,24 +369,20 @@ export const agregarAFavoritos = async (req, res) => {
   }
 }
 
-// Eliminar emprendimiento de favoritos
 export const eliminarDeFavoritos = async (req, res) => {
   const clienteId = req.clienteBDD?._id
   const { emprendimientoId } = req.params
 
   try {
     const cliente = await Cliente.findById(clienteId)
-
     cliente.favoritos = cliente.favoritos.filter(id => id.toString() !== emprendimientoId)
     await cliente.save()
-
     res.json({ mensaje: 'Eliminado de favoritos correctamente' })
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al eliminar de favoritos', error: error.message })
   }
 }
 
-// Obtener lista de favoritos
 export const obtenerFavoritos = async (req, res) => {
   const clienteId = req.clienteBDD?._id
 
@@ -323,87 +403,8 @@ export const obtenerFavoritos = async (req, res) => {
 }
 
 // -----------------------------
-// NUEVO: constantes de validación de estado
+// Exports
 // -----------------------------
-const ESTADOS_PERMITIDOS = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
-
-// -----------------------------
-// Cliente cambia su propio estado (con token)
-// -----------------------------
-export const actualizarMiEstado = async (req, res) => {
-  const { estado, status } = req.body
-
-  if (!estado && typeof status !== 'boolean') {
-    return res.status(400).json({ msg: 'Debes enviar al menos uno: estado o status' })
-  }
-
-  if (estado && !ESTADOS_PERMITIDOS.includes(estado)) {
-    return res.status(400).json({
-      msg: `Estado inválido. Permitidos: ${ESTADOS_PERMITIDOS.join(', ')}`
-    })
-  }
-
-  try {
-    const clienteId = req.clienteBDD?._id
-    const cliente = await Cliente.findById(clienteId)
-    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
-
-    if (estado) cliente.estado_Emprendedor = estado
-    if (typeof status === 'boolean') cliente.status = status
-
-    await cliente.save()
-    return res.status(200).json({
-      msg: 'Estado actualizado correctamente',
-      estado_Emprendedor: cliente.estado_Emprendedor,
-      status: cliente.status
-    })
-  } catch (error) {
-    return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
-  }
-}
-
-// -----------------------------
-// Cliente cambia su estado SIN token
-// -----------------------------
-export const actualizarEstadoSinToken = async (req, res) => {
-  const { email, password, estado, status } = req.body
-
-  if (!email || !password) {
-    return res.status(400).json({ msg: 'Email y password son obligatorios' })
-  }
-
-  if (!estado && typeof status !== 'boolean') {
-    return res.status(400).json({ msg: 'Debes enviar al menos uno: estado o status' })
-  }
-
-  if (estado && !ESTADOS_PERMITIDOS.includes(estado)) {
-    return res.status(400).json({
-      msg: `Estado inválido. Permitidos: ${ESTADOS_PERMITIDOS.join(', ')}`
-    })
-  }
-
-  try {
-    const cliente = await Cliente.findOne({ email })
-    if (!cliente) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
-
-    const ok = await cliente.matchPassword(password)
-    if (!ok) return res.status(401).json({ msg: 'El password no es correcto' })
-
-    if (estado) cliente.estado_Emprendedor = estado
-    if (typeof status === 'boolean') cliente.status = status
-
-    await cliente.save()
-    return res.status(200).json({
-      msg: 'Estado actualizado correctamente',
-      estado_Emprendedor: cliente.estado_Emprendedor,
-      status: cliente.status
-    })
-  } catch (error) {
-    return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
-  }
-}
-
-
 export {
   registro,
   confirmarMail,
@@ -416,7 +417,6 @@ export {
   eliminarCliente,
   perfil,
   actualizarPassword,
-  actualizarPerfil
-};
-
-
+  actualizarPerfil,
+  actualizarEstadoClienteById // <-- IMPORTANTE para /estado/:id
+}
