@@ -33,7 +33,7 @@ router.post('/nuevo-password/:token', crearNuevoPassword)
 
 // Gestión de clientes
 router.get('/todos', verClientes)
-router.put('/actualizar/:id', actualizarCliente) // fallback que tu front intenta si /estado falla
+router.put('/actualizar/:id', actualizarCliente)
 router.delete('/eliminar/:id', eliminarCliente)
 
 // Perfil protegido
@@ -41,7 +41,7 @@ router.get('/perfil', verificarTokenJWT, perfil)
 router.put('/cliente/:id', verificarTokenJWT, actualizarPerfil)
 router.put('/cliente/actualizarpassword/:id', verificarTokenJWT, actualizarPassword)
 
-// *** Ruta EXACTA que consume tu frontend para cambiar estado ***
+// *** NUEVO: Editar estado del cliente por ID ***
 router.put('/estado/:id', /* opcional: verificarTokenJWT, */ actualizarEstadoClienteById)
 
 export default router
