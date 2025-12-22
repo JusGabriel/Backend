@@ -2,7 +2,7 @@
 import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
-import Producto from '../models/Producto.js';
+import Producto from '../models/Productos.js';
 import Emprendimiento from '../models/Emprendimiento.js';
 
 // ---------- Helpers de validación ----------
@@ -289,3 +289,4 @@ export const obtenerTodosLosProductos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
+
