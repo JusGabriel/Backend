@@ -11,7 +11,9 @@ import {
   eliminarCliente,
   perfil,
   actualizarPassword,
-  actualizarPerfil
+  actualizarPerfil,
+  actualizarMiEstado,     
+  actualizarEstadoSinToken 
 } from "../controllers/cliente_controllers.js"
 import { verificarTokenJWT } from '../middleware/JWT.js'
 
@@ -39,4 +41,12 @@ router.get("/perfil", verificarTokenJWT, perfil)
 router.put("/cliente/:id", verificarTokenJWT, actualizarPerfil)
 router.put("/cliente/actualizarpassword/:id", verificarTokenJWT, actualizarPassword)
 
+// Variante recomendada: requiere token (usuario logueado)
+router.put('/cliente/estado', verificarTokenJWT, actualizarMiEstado)
+
+// Variante sin token: email + password en body
+router.put('/cliente/estado/publico', actualizarEstadoSinToken)
+
+
 export default router
+
