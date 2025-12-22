@@ -37,8 +37,9 @@ router.put('/emprendedore/actualizarpassword/:id', verificarTokenJWT, actualizar
 // CRUD emprendedores (solo para admins o uso general)
 router.get("/todos", verEmprendedores)
 router.put('/actualizar/:id', verificarTokenJWT, actualizarEmprendedor)
-router.delete('/eliminar/:id', verificarTokenJWT, eliminarEmprendedor)
+router.delete('/eliminar/:id', eliminarEmprendedor)
 
 export default router
+
 
 
