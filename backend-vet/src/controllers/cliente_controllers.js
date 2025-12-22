@@ -328,9 +328,7 @@ export const obtenerFavoritos = async (req, res) => {
 const ESTADOS_PERMITIDOS = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
 
 // -----------------------------
-// NUEVO: Cliente cambia su propio estado (con token)
-// PUT /cliente/estado
-// Body: { estado?: String, status?: Boolean }
+// Cliente cambia su propio estado (con token)
 // -----------------------------
 export const actualizarMiEstado = async (req, res) => {
   const { estado, status } = req.body
@@ -340,7 +338,9 @@ export const actualizarMiEstado = async (req, res) => {
   }
 
   if (estado && !ESTADOS_PERMITIDOS.includes(estado)) {
-    return res.status(400).json({ msg: Estado inválido. Permitidos: ${ESTADOS_PERMITIDOS.join(', ')} })
+    return res.status(400).json({
+      msg: `Estado inválido. Permitidos: ${ESTADOS_PERMITIDOS.join(', ')}`
+    })
   }
 
   try {
@@ -350,9 +350,6 @@ export const actualizarMiEstado = async (req, res) => {
 
     if (estado) cliente.estado_Emprendedor = estado
     if (typeof status === 'boolean') cliente.status = status
-
-    // Regla opcional: si se suspende, también se inactiva
-    // if (estado === 'Suspendido') cliente.status = false
 
     await cliente.save()
     return res.status(200).json({
@@ -366,32 +363,28 @@ export const actualizarMiEstado = async (req, res) => {
 }
 
 // -----------------------------
-// NUEVO: Cliente cambia su estado SIN token
-// PUT /cliente/estado/publico
-// Body: { email: String, password: String, estado?: String, status?: Boolean }
+// Cliente cambia su estado SIN token
 // -----------------------------
 export const actualizarEstadoSinToken = async (req, res) => {
   const { email, password, estado, status } = req.body
 
-  // Validaciones básicas
   if (!email || !password) {
     return res.status(400).json({ msg: 'Email y password son obligatorios' })
   }
+
   if (!estado && typeof status !== 'boolean') {
     return res.status(400).json({ msg: 'Debes enviar al menos uno: estado o status' })
   }
+
   if (estado && !ESTADOS_PERMITIDOS.includes(estado)) {
-    return res.status(400).json({ msg: Estado inválido. Permitidos: ${ESTADOS_PERMITIDOS.join(', ')} })
+    return res.status(400).json({
+      msg: `Estado inválido. Permitidos: ${ESTADOS_PERMITIDOS.join(', ')}`
+    })
   }
 
   try {
     const cliente = await Cliente.findOne({ email })
     if (!cliente) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
-
-    // Si el cliente se registró con Google y no tiene password local
-    if (!cliente.password) {
-      return res.status(400).json({ msg: 'La cuenta no tiene password local. Inicia sesión para cambiar el estado.' })
-    }
 
     const ok = await cliente.matchPassword(password)
     if (!ok) return res.status(401).json({ msg: 'El password no es correcto' })
@@ -428,4 +421,5 @@ export {
   actualizarEstadoSinToken
 
 };
+
 
