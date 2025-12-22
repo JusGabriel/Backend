@@ -416,10 +416,7 @@ export {
   eliminarCliente,
   perfil,
   actualizarPassword,
-  actualizarPerfil,
-  actualizarMiEstado,
-  actualizarEstadoSinToken
-
+  actualizarPerfil
 };
 
 
