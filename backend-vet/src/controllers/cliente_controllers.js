@@ -1,3 +1,4 @@
+
 // controllers/cliente_controllers.js
 import Cliente from '../models/Cliente.js'
 import Emprendimiento from '../models/Emprendimiento.js'
@@ -8,9 +9,9 @@ import {
 } from '../config/nodemailerCliente.js'
 import { crearTokenJWT } from '../middleware/JWT.js'
 
-// ============================
-// Validaciones internas
-// ============================
+/* ============================
+   Validaciones internas
+============================ */
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || !/^[a-zA-Z\s]+$/.test(nombre.trim())) {
     return 'El nombre es obligatorio y solo puede contener letras y espacios'
@@ -29,9 +30,9 @@ function validarTelefono(telefono) {
   return null
 }
 
-// ============================
-// Registro / confirmación / recuperación
-// ============================
+/* ============================
+   Registro / confirmación / recuperación
+============================ */
 const registro = async (req, res) => {
   const { nombre, telefono, email, password } = req.body
   if (Object.values(req.body).includes('')) {
@@ -104,9 +105,9 @@ const crearNuevoPassword = async (req, res) => {
   res.status(200).json({ msg: 'Ya puedes iniciar sesión con tu nuevo password' })
 }
 
-// ============================
-// Login
-// ============================
+/* ============================
+   Login
+============================ */
 const login = async (req, res) => {
   const { email, password } = req.body
   if (Object.values(req.body).includes('')) {
@@ -123,21 +124,42 @@ const login = async (req, res) => {
   res.status(200).json({ token, rol, nombre, apellido, direccion, telefono, _id, email: clienteBDD.email })
 }
 
-// ============================
-// Listado
-// ============================
+/* ============================
+   Listado (decorado para UI)
+============================ */
 const verClientes = async (req, res) => {
   try {
-    const clientes = await Cliente.find()
-    res.status(200).json(clientes)
+    const clientes = await Cliente.find().lean()
+
+    const decorados = clientes.map((c) => {
+      // Derivar etiqueta de UI:
+      // - 'Activo' -> 'Correcto'
+      // - 'AdvertenciaX' -> igual
+      // - 'Suspendido' -> igual
+      // - status=false -> 'Suspendido' (por seguridad)
+      let estadoUI = 'Correcto'
+      if (c.status === false) {
+        estadoUI = 'Suspendido'
+      } else {
+        const e = c.estado_Emprendedor
+        if (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)) {
+          estadoUI = e
+        } else {
+          estadoUI = 'Correcto' // Activo
+        }
+      }
+      return { ...c, estado: estadoUI, estado_Cliente: estadoUI }
+    })
+
+    res.status(200).json(decorados)
   } catch (error) {
     res.status(500).json({ msg: 'Error al obtener los clientes' })
   }
 }
 
-// ============================
-// Actualizar datos (perfil por ID)
-// ============================
+/* ============================
+   Actualizar datos (perfil por ID)
+============================ */
 const actualizarCliente = async (req, res) => {
   const { id } = req.params
 
@@ -167,9 +189,9 @@ const actualizarCliente = async (req, res) => {
   }
 }
 
-// ============================
-// Eliminar
-// ============================
+/* ============================
+   Eliminar
+============================ */
 const eliminarCliente = async (req, res) => {
   const { id } = req.params
   try {
@@ -182,17 +204,17 @@ const eliminarCliente = async (req, res) => {
   }
 }
 
-// ============================
-// Perfil (protegido)
-// ============================
+/* ============================
+   Perfil (protegido)
+============================ */
 const perfil = (req, res) => {
   const { token, confirmEmail, createdAt, updatedAt, __v, password, ...datosPerfil } = req.clienteBDD
   res.status(200).json(datosPerfil)
 }
 
-// ============================
-// Actualizar password (protegido)
-// ============================
+/* ============================
+   Actualizar password (protegido)
+============================ */
 const actualizarPassword = async (req, res) => {
   try {
     const clienteBDD = await Cliente.findById(req.clienteBDD._id)
@@ -207,9 +229,9 @@ const actualizarPassword = async (req, res) => {
   }
 }
 
-// ============================
-// Actualizar perfil (protegido, con ID)
-// ============================
+/* ============================
+   Actualizar perfil (protegido, con ID)
+============================ */
 const actualizarPerfil = async (req, res) => {
   const { id } = req.params
   const { nombre, apellido, telefono, email } = req.body
@@ -241,14 +263,13 @@ const actualizarPerfil = async (req, res) => {
   res.status(200).json(clienteBDD)
 }
 
-// ============================
-// *** NUEVO *** Editar estado por ID
-//   Ruta: PUT /api/clientes/estado/:id
-//   Body: { estado: 'Activo|Inactivo|Advertencia1|Advertencia2|Advertencia3|Suspendido' }
-//      ó { estado_Cliente: '...' }
-// ============================
-const ESTADOS_PERMITIDOS = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
-
+/* ============================
+   *** NUEVO *** Editar estado por ID (UI → Modelo)
+   Ruta: PUT /api/clientes/estado/:id
+   Body: { estado: 'Correcto|Advertencia1|Advertencia2|Advertencia3|Suspendido' }
+         ó { estado_Cliente: '...' }
+============================ */
+const ESTADOS_UI = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
 const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -256,29 +277,38 @@ const actualizarEstadoClienteById = async (req, res) => {
   }
 
   const { estado, estado_Cliente } = req.body
-  const nuevoEstado = estado ?? estado_Cliente
-  if (!nuevoEstado) return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
+  const nuevoEstadoUI = estado ?? estado_Cliente
+  if (!nuevoEstadoUI) {
+    return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
+  }
+  if (!ESTADOS_UI.includes(nuevoEstadoUI)) {
+    return res.status(400).json({ msg: `Estado inválido. Permitidos: ${ESTADOS_UI.join(', ')}` })
+  }
 
   try {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    if (nuevoEstado === 'Inactivo') {
-      cliente.status = false
-    } else if (nuevoEstado === 'Activo') {
-      cliente.status = true
+    // Mapeo UI → modelo
+    // Correcto => Activo + status:true
+    // Advertencias => estado_Emprendedor = AdvertenciaX (status no cambia)
+    // Suspendido => estado_Emprendedor = Suspendido + status:false
+    if (nuevoEstadoUI === 'Correcto') {
       cliente.estado_Emprendedor = 'Activo'
-    } else if (ESTADOS_PERMITIDOS.includes(nuevoEstado)) {
-      cliente.estado_Emprendedor = nuevoEstado
-      if (nuevoEstado === 'Suspendido') cliente.status = false // opcional
+      cliente.status = true
+    } else if (nuevoEstadoUI === 'Suspendido') {
+      cliente.estado_Emprendedor = 'Suspendido'
+      cliente.status = false
     } else {
-      return res.status(400).json({
-        msg: `Estado inválido. Permitidos: Inactivo, Activo, ${ESTADOS_PERMITIDOS.join(', ')}`
-      })
+      // Advertencias
+      cliente.estado_Emprendedor = nuevoEstadoUI
+      // Opcional: mantener status como esté, o fijarlo en true si quieres que el usuario siga "activo" con advertencia
+      // cliente.status = true
     }
 
     await cliente.save()
 
+    // Devuelve ambos por conveniencia
     return res.status(200).json({
       msg: 'Estado actualizado correctamente',
       estado_Emprendedor: cliente.estado_Emprendedor,
@@ -289,9 +319,9 @@ const actualizarEstadoClienteById = async (req, res) => {
   }
 }
 
-// ============================
-// Exports (TODOS definidos, sin duplicados)
-// ============================
+/* ============================
+   Exports (TODOS definidos, sin duplicados)
+============================ */
 export {
   registro,
   confirmarMail,
