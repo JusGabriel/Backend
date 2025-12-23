@@ -12,7 +12,7 @@ import {
 } from '../controllers/emprendimientoController.js';
 
 import { verificarTokenJWT } from '../middleware/JWT.js';
-import upload, { setUploadFolder } from '../middlewares/upload.js';
+import upload, { setUploadFolder } from '../middleware/upload.js';
 
 const router = Router();
 
