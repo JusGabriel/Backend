@@ -19,9 +19,8 @@ import emprendimientoRoutes from './routers/emprendimientoRoutes.js';
 import favoritoRoutes from './routers/favoritoRoutes.js';
 import favoritosEmprendedorRoutes from './routers/favoritosEmprendedorRoutes.js';
 import path from 'path';
-
-// 👉 NUEVO: importa el router del buscador
 import searchRoutes from './routers/search_routes.js';
+import multer from 'multer'; // 👈 para detectar errores de Multer
 
 dotenv.config();
 
@@ -196,6 +195,33 @@ app.get('/admin/delete-idGoogle-index', async (req, res) => {
   }
 });
 
+/* ===== Manejo de errores de subida ===== */
+app.use((err, req, res, next) => {
+  // Errores específicos de Multer
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'El archivo excede el tamaño máximo permitido.' });
+    }
+    return res.status(400).json({ error: `Error de subida: ${err.message}` });
+  }
+  // Error de formato (del fileFilter)
+  if (err?.message?.startsWith('Formato no permitido')) {
+    return res.status(415).json({ error: err.message });
+  }
+  // Otros errores
+  next(err);
+});
+
+/* ===== 404 (debe ir al final) ===== */
+app.use((req, res) => {
+  res.status(404).send('Endpoint no encontrado');
+});
+
+
+
+
+
+
 // Estado de sesión
 app.get('/api/status', (req, res) => {
   if (req.isAuthenticated()) {
@@ -216,3 +242,4 @@ app.use((req, res) => {
 });
 
 export default app;
+
