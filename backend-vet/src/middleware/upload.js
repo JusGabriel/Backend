@@ -4,33 +4,37 @@ import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import cloudinary from '../config/cloudinary.js';
 
+// Formatos que cubren móviles y desktop
+const ACCEPTED_MIME = /image\/(jpe?g|png|webp|heic|heif|tiff?|bmp)/i;
+
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => ({
     folder: `quitoemprende/${req.uploadFolder || 'general'}`,
     resource_type: 'image',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     use_filename: true,
     unique_filename: true,
-    // Optimización (ajusta según tu UI)
-    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+    // Permite subir originales en varios formatos
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'tif', 'tiff', 'bmp'],
+    // Entrega optimizada (f_auto/q_auto) en CDN
+    transformation: [{ quality: 'auto', fetch_format: 'auto', flags: 'lossy' }],
   }),
 });
 
 const fileFilter = (req, file, cb) => {
-  const ok = /image\/(jpe?g|png|webp)/i.test(file.mimetype);
-  cb(ok ? null : new Error('Formato no permitido (solo jpg, jpeg, png, webp)'), ok);
+  const ok = ACCEPTED_MIME.test(file.mimetype);
+  cb(ok ? null : new Error('Formato no permitido (jpg, jpeg, png, webp, heic, heif, tiff, bmp)'), ok);
 };
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB (ajusta según necesidad)
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB para fotos de alta resolución
 });
 
 export default upload;
 
-// Utilidad para setear carpeta (logos/productos)
+// Utilidad para setear carpeta (logos/productos, etc.)
 export const setUploadFolder = (folder) => (req, _res, next) => {
   req.uploadFolder = folder;
   next();
