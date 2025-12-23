@@ -35,7 +35,7 @@ function validarObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-// ---------- CREAR PRODUCTO (acepta archivo en req.file o URL en body) ----------
+// ---------- CREAR PRODUCTO ----------
 export const crearProducto = async (req, res) => {
   const { nombre, descripcion, precio, categoria, stock, emprendimiento } = req.body;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -82,7 +82,7 @@ export const crearProducto = async (req, res) => {
       precio: precioNum,
       imagen: imagenUrl,
       imagenPublicId,
-      categoria: categoria || null,
+      categoria: categoria || null, // sigue guardando el id si viene, pero no popula
       stock: stockNum,
       emprendimiento: empDoc._id
     });
@@ -104,12 +104,13 @@ export const obtenerProductosPorEmprendedor = async (req, res) => {
     const emprIds = emprendimientos.map(e => e._id);
 
     const productos = await Producto.find({ emprendimiento: { $in: emprIds } })
-      .populate('categoria')
+      // .populate('categoria') // ❌ quitar populate
       .populate({
         path: 'emprendimiento',
         select: 'nombreComercial descripcion emprendedor',
         populate: { path: 'emprendedor', select: 'nombre apellido' }
-      });
+      })
+      .lean();
 
     res.json(productos);
   } catch (error) {
@@ -122,12 +123,13 @@ export const obtenerProductosPorEmprendedor = async (req, res) => {
 export const obtenerProducto = async (req, res) => {
   try {
     const producto = await Producto.findById(req.params.id)
-      .populate('categoria')
+      // .populate('categoria') // ❌ quitar
       .populate({
         path: 'emprendimiento',
         select: 'nombreComercial descripcion emprendedor',
         populate: { path: 'emprendedor', select: 'nombre apellido' }
-      });
+      })
+      .lean();
 
     if (!producto) return res.status(404).json({ mensaje: 'Producto no encontrado' });
     res.json(producto);
@@ -200,7 +202,7 @@ export const actualizarProducto = async (req, res) => {
     if (camposActualizar.precio !== undefined) camposActualizar.precio = Number(camposActualizar.precio);
     if (camposActualizar.stock !== undefined)  camposActualizar.stock  = Number(camposActualizar.stock);
 
-    const actualizado = await Producto.findByIdAndUpdate(productoId, camposActualizar, { new: true });
+    const actualizado = await Producto.findByIdAndUpdate(productoId, camposActualizar, { new: true }).lean();
     res.json({ mensaje: 'Producto actualizado', producto: actualizado });
   } catch (error) {
     console.error('actualizarProducto error:', error);
@@ -243,12 +245,13 @@ export const eliminarProducto = async (req, res) => {
 export const obtenerTodosLosProductos = async (_req, res) => {
   try {
     const productos = await Producto.find()
-      .populate('categoria')
+      // .populate('categoria') // ❌ quitar
       .populate({
         path: 'emprendimiento',
         select: 'nombreComercial descripcion emprendedor',
         populate: { path: 'emprendedor', select: 'nombre apellido' }
-      });
+      })
+      .lean();
 
     res.json(productos);
   } catch (error) {
