@@ -4,7 +4,7 @@ import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import cloudinary from '../config/cloudinary.js';
 
-// Formatos que cubren móviles y desktop
+// Formatos aceptados (móviles + desktop)
 const ACCEPTED_MIME = /image\/(jpe?g|png|webp|heic|heif|tiff?|bmp)/i;
 
 const storage = new CloudinaryStorage({
@@ -14,9 +14,7 @@ const storage = new CloudinaryStorage({
     resource_type: 'image',
     use_filename: true,
     unique_filename: true,
-    // Permite subir originales en varios formatos
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'tif', 'tiff', 'bmp'],
-    // Entrega optimizada (f_auto/q_auto) en CDN
     transformation: [{ quality: 'auto', fetch_format: 'auto', flags: 'lossy' }],
   }),
 });
@@ -29,7 +27,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB para fotos de alta resolución
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
 });
 
 export default upload;
