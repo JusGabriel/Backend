@@ -8,9 +8,9 @@ const emprendimientoSchema = new Schema({
 
   descripcion: { type: String, default: '' },
 
-  // URL pública de Cloudinary (secure_url)
+  // URL pública de Cloudinary
   logo:         { type: String, default: null },
-  // public_id de Cloudinary (para destroy)
+  // public_id para poder borrar/reemplazar en Cloudinary
   logoPublicId: { type: String, default: null },
 
   ubicacion: {
@@ -39,7 +39,6 @@ const emprendimientoSchema = new Schema({
   toObject: { virtuals: true }
 });
 
-// Virtual para obtener los productos relacionados a este emprendimiento
 emprendimientoSchema.virtual('productos', {
   ref: 'Producto',
   localField: '_id',
