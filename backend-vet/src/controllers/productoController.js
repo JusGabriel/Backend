@@ -1,9 +1,9 @@
+
 // controllers/productoController.js
 import mongoose from 'mongoose';
-import path from 'path';
-import fs from 'fs';
 import Producto from '../models/Productos.js';
 import Emprendimiento from '../models/Emprendimiento.js';
+import cloudinary from '../config/cloudinary.js';
 
 // ---------- Helpers de validación ----------
 function validarNombre(nombre) {
@@ -39,21 +39,7 @@ function validarObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-// ---------- Util: eliminar archivo si existe en uploads ----------
-const eliminarArchivoSiExiste = (rutaRelativa) => {
-  if (!rutaRelativa) return;
-  const p = rutaRelativa.startsWith('/') ? rutaRelativa.slice(1) : rutaRelativa;
-  const fullPath = path.resolve(p);
-  if (fs.existsSync(fullPath)) {
-    try {
-      fs.unlinkSync(fullPath);
-    } catch (err) {
-      console.error('Error eliminando archivo:', err);
-    }
-  }
-};
-
-// ---------- CREAR PRODUCTO (acepta imagen en req.file o imagen en body como URL) ----------
+// ---------- CREAR PRODUCTO (acepta archivo en req.file o URL en body) ----------
 export const crearProducto = async (req, res) => {
   const { nombre, descripcion, precio, categoria, stock, emprendimiento } = req.body;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -84,26 +70,22 @@ export const crearProducto = async (req, res) => {
   try {
     // Verificar que el emprendimiento exista y pertenezca al emprendedor
     const empDoc = await Emprendimiento.findById(emprendimiento);
-    if (!empDoc) {
-      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
-    }
+    if (!empDoc) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
+
     if (empDoc.emprendedor.toString() !== emprendedorId.toString()) {
       return res.status(403).json({ mensaje: 'No puedes crear productos en un emprendimiento que no te pertenece' });
     }
 
-    // Resolver imagen: si multer subió archivo -> req.file, si no -> req.body.imagen (URL)
-    let imagenValor = null;
-    if (req.file && req.file.filename) {
-      imagenValor = `/uploads/${req.file.filename}`;
-    } else if (req.body.imagen) {
-      imagenValor = req.body.imagen || null;
-    }
+    // Resolver imagen (Cloudinary)
+    const imagenUrl      = req.file?.path || (typeof req.body.imagen === 'string' ? req.body.imagen : null);
+    const imagenPublicId = req.file?.filename || null;
 
     const nuevoProducto = new Producto({
       nombre,
       descripcion: descripcion || '',
       precio: precioNum,
-      imagen: imagenValor,
+      imagen: imagenUrl,
+      imagenPublicId,
       categoria: categoria || null,
       stock: stockNum,
       emprendimiento: empDoc._id
@@ -130,10 +112,7 @@ export const obtenerProductosPorEmprendedor = async (req, res) => {
       .populate({
         path: 'emprendimiento',
         select: 'nombreComercial descripcion emprendedor',
-        populate: {
-          path: 'emprendedor',
-          select: 'nombre apellido'
-        }
+        populate: { path: 'emprendedor', select: 'nombre apellido' }
       });
 
     res.json(productos);
@@ -151,16 +130,10 @@ export const obtenerProducto = async (req, res) => {
       .populate({
         path: 'emprendimiento',
         select: 'nombreComercial descripcion emprendedor',
-        populate: {
-          path: 'emprendedor',
-          select: 'nombre apellido'
-        }
+        populate: { path: 'emprendedor', select: 'nombre apellido' }
       });
 
-    if (!producto) {
-      return res.status(404).json({ mensaje: 'Producto no encontrado' });
-    }
-
+    if (!producto) return res.status(404).json({ mensaje: 'Producto no encontrado' });
     res.json(producto);
   } catch (error) {
     console.error('obtenerProducto error:', error);
@@ -168,7 +141,7 @@ export const obtenerProducto = async (req, res) => {
   }
 };
 
-// ---------- ACTUALIZAR PRODUCTO (acepta imagen nueva en req.file o imagen URL en body) ----------
+// ---------- ACTUALIZAR PRODUCTO ----------
 export const actualizarProducto = async (req, res) => {
   const productoId = req.params.id;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -205,30 +178,31 @@ export const actualizarProducto = async (req, res) => {
       if (err) return res.status(400).json({ mensaje: err });
     }
 
-    // Campos permitidos para actualizar (no se permite cambiar 'emprendimiento' aquí)
+    // Campos permitidos (no se permite cambiar 'emprendimiento' aquí)
     const camposActualizar = {};
     ['nombre', 'descripcion', 'precio', 'imagen', 'categoria', 'stock', 'estado'].forEach(campo => {
       if (req.body[campo] !== undefined) camposActualizar[campo] = req.body[campo];
     });
 
-    // Si multer subió nueva imagen, eliminar anterior si estaba en /uploads y setear nuevo path
-    if (req.file && req.file.filename) {
-      if (producto.imagen && producto.imagen.startsWith('/uploads')) {
-        eliminarArchivoSiExiste(producto.imagen);
+    // Si suben nueva imagen a Cloudinary, borra la anterior si tenía public_id
+    if (req.file?.path) {
+      if (producto.imagenPublicId) {
+        try { await cloudinary.uploader.destroy(producto.imagenPublicId); } catch {}
       }
-      camposActualizar.imagen = `/uploads/${req.file.filename}`;
-    } else if (req.body.imagen !== undefined) {
-      // si envían imagen por body (URL o vaciado)
+      camposActualizar.imagen = req.file.path;         // URL pública (https)
+      camposActualizar.imagenPublicId = req.file.filename; // public_id
+    } else if (req.body.imagen !== undefined && req.body.imagen !== producto.imagen) {
+      // Cambiaron manualmente la URL -> si la anterior era Cloudinary, borra
+      if (producto.imagenPublicId) {
+        try { await cloudinary.uploader.destroy(producto.imagenPublicId); } catch {}
+      }
       camposActualizar.imagen = req.body.imagen || null;
-      // si desean borrar la imagen en disco enviando imagen = '' o null, no intentamos borrar a menos que empiecen con /uploads
-      if ((req.body.imagen === '' || req.body.imagen === null) && producto.imagen && producto.imagen.startsWith('/uploads')) {
-        eliminarArchivoSiExiste(producto.imagen);
-      }
+      camposActualizar.imagenPublicId = null;
     }
 
     // Normalizar tipos
     if (camposActualizar.precio !== undefined) camposActualizar.precio = Number(camposActualizar.precio);
-    if (camposActualizar.stock !== undefined) camposActualizar.stock = Number(camposActualizar.stock);
+    if (camposActualizar.stock !== undefined)  camposActualizar.stock  = Number(camposActualizar.stock);
 
     const actualizado = await Producto.findByIdAndUpdate(productoId, camposActualizar, { new: true });
     res.json({ mensaje: 'Producto actualizado', producto: actualizado });
@@ -238,7 +212,7 @@ export const actualizarProducto = async (req, res) => {
   }
 };
 
-// ---------- ELIMINAR PRODUCTO (también elimina archivo de imagen si estaba en /uploads) ----------
+// ---------- ELIMINAR PRODUCTO ----------
 export const eliminarProducto = async (req, res) => {
   const productoId = req.params.id;
   const emprendedorId = req.emprendedorBDD?._id;
@@ -256,9 +230,9 @@ export const eliminarProducto = async (req, res) => {
       return res.status(403).json({ mensaje: 'No tienes permiso para eliminar este producto' });
     }
 
-    // Eliminar imagen del disco si corresponde
-    if (producto.imagen && producto.imagen.startsWith('/uploads')) {
-      eliminarArchivoSiExiste(producto.imagen);
+    // Si la imagen está en Cloudinary, destruye
+    if (producto.imagenPublicId) {
+      try { await cloudinary.uploader.destroy(producto.imagenPublicId); } catch {}
     }
 
     await producto.deleteOne();
@@ -270,17 +244,14 @@ export const eliminarProducto = async (req, res) => {
 };
 
 // ---------- OBTENER TODOS LOS PRODUCTOS (públicos) ----------
-export const obtenerTodosLosProductos = async (req, res) => {
+export const obtenerTodosLosProductos = async (_req, res) => {
   try {
     const productos = await Producto.find()
       .populate('categoria')
       .populate({
         path: 'emprendimiento',
         select: 'nombreComercial descripcion emprendedor',
-        populate: {
-          path: 'emprendedor',
-          select: 'nombre apellido'
-        }
+        populate: { path: 'emprendedor', select: 'nombre apellido' }
       });
 
     res.json(productos);
@@ -289,4 +260,3 @@ export const obtenerTodosLosProductos = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener productos', error: error.message });
   }
 };
-
