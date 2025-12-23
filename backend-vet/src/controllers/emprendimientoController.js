@@ -1,8 +1,8 @@
+
 // controllers/emprendimientoController.js
 import Emprendimiento from '../models/Emprendimiento.js';
 import Categoria from '../models/Categoria.js';
-import path from 'path';
-import fs from 'fs';
+import cloudinary from '../config/cloudinary.js';
 
 // -------------------------------
 // Helpers: slug
@@ -40,23 +40,6 @@ const asegurarSlugUnicoParaUpdate = async (baseSlug, excludeId) => {
 };
 
 // -------------------------------
-// Util: eliminar archivo en uploads si existe
-// -------------------------------
-const eliminarArchivoSiExiste = (rutaRelativa) => {
-  if (!rutaRelativa) return;
-  // rutaRelativa esperada: '/uploads/archivo.ext' o 'uploads/archivo.ext'
-  const p = rutaRelativa.startsWith('/') ? rutaRelativa.slice(1) : rutaRelativa;
-  const fullPath = path.resolve(p);
-  if (fs.existsSync(fullPath)) {
-    try {
-      fs.unlinkSync(fullPath);
-    } catch (err) {
-      console.error('Error eliminando archivo:', err);
-    }
-  }
-};
-
-// -------------------------------
 // Util: parsear fields tipo "ubicacion[direccion]" desde req.body (FormData style)
 // -------------------------------
 const parseFormDataNested = (body) => {
@@ -66,31 +49,21 @@ const parseFormDataNested = (body) => {
 
   for (const k of Object.keys(body)) {
     const mU = k.match(/^ubicacion\[(.+)\]$/);
-    if (mU) {
-      ubicacion[mU[1]] = body[k];
-      continue;
-    }
+    if (mU) { ubicacion[mU[1]] = body[k]; continue; }
+
     const mC = k.match(/^contacto\[(.+)\]$/);
-    if (mC) {
-      contacto[mC[1]] = body[k];
-      continue;
-    }
-    // categorias puede venir como JSON string o como campo simple
+    if (mC) { contacto[mC[1]] = body[k]; continue; }
+
     if (k === 'categorias') {
-      try {
-        result.categorias = JSON.parse(body[k]);
-      } catch (err) {
-        // si no es JSON, convertir a array o dejar como string
-        result.categorias = Array.isArray(body[k]) ? body[k] : [body[k]];
-      }
+      try { result.categorias = JSON.parse(body[k]); }
+      catch { result.categorias = Array.isArray(body[k]) ? body[k] : [body[k]]; }
       continue;
     }
-    // campos normales
+
     result[k] = body[k];
   }
 
   if (Object.keys(ubicacion).length > 0) {
-    // parsear lat/lng a Number si vienen
     if (ubicacion.lat !== undefined && ubicacion.lat !== '') ubicacion.lat = Number(ubicacion.lat);
     if (ubicacion.lng !== undefined && ubicacion.lng !== '') ubicacion.lng = Number(ubicacion.lng);
     result.ubicacion = { ...ubicacion };
@@ -104,16 +77,15 @@ const parseFormDataNested = (body) => {
 
 // -------------------------------
 // CREAR EMPRENDIMIENTO
-// - acepta logo mediante req.file (multer) o req.body.logo (compatibilidad URL)
+// - acepta logo mediante req.file (multer) o req.body.logo (URL pública)
 // -------------------------------
 export const crearEmprendimiento = async (req, res) => {
-  // Primero parsear body con campos nested (si vienen desde FormData)
   const parsed = parseFormDataNested(req.body);
   const nombreComercial = parsed.nombreComercial || req.body.nombreComercial;
-  const descripcion = parsed.descripcion || req.body.descripcion || '';
-  const ubicacion = parsed.ubicacion || req.body.ubicacion || {};
-  const contacto = parsed.contacto || req.body.contacto || {};
-  const categorias = parsed.categorias || req.body.categorias || [];
+  const descripcion     = parsed.descripcion     || req.body.descripcion || '';
+  const ubicacion       = parsed.ubicacion       || req.body.ubicacion || {};
+  const contacto        = parsed.contacto        || req.body.contacto || {};
+  const categorias      = parsed.categorias      || req.body.categorias || [];
 
   const emprendedorId = req.emprendedorBDD?._id;
   if (!emprendedorId) {
@@ -122,25 +94,18 @@ export const crearEmprendimiento = async (req, res) => {
 
   try {
     const baseSlug = crearSlugBase(nombreComercial || '');
-    const slug = await asegurarSlugUnico(baseSlug);
+    const slug     = await asegurarSlugUnico(baseSlug);
 
-    // Resolver logo: si multer guardó archivo -> req.file, si no -> req.body.logo (URL)
-    let logoValor = null;
-    if (req.file && req.file.filename) {
-      logoValor = `/uploads/${req.file.filename}`;
-    } else if (req.body.logo) {
-      logoValor = req.body.logo;
-    }
-
-    // Normalizar lat/lng a Number si vienen string directo en ubicacion
-    if (ubicacion && typeof ubicacion.lat === 'string') ubicacion.lat = Number(ubicacion.lat);
-    if (ubicacion && typeof ubicacion.lng === 'string') ubicacion.lng = Number(ubicacion.lng);
+    // Resolver logo (Cloudinary)
+    const logoUrl      = req.file?.path || req.body.logo || null;     // URL pública
+    const logoPublicId = req.file?.filename || null;                  // public_id (solo si subió archivo)
 
     const nuevoEmprendimiento = new Emprendimiento({
       nombreComercial,
       slug,
       descripcion,
-      logo: logoValor || null,
+      logo: logoUrl,
+      logoPublicId,
       ubicacion,
       contacto,
       categorias,
@@ -235,7 +200,8 @@ export const obtenerEmprendimientoPorSlug = async (req, res) => {
 
 // -------------------------------
 // ACTUALIZAR EMPRENDIMIENTO
-// - acepta logo en req.file (multer) o logo en body (URL)
+// - acepta logo nuevo en req.file o URL nueva en body
+// - si hay logo anterior en Cloudinary (logoPublicId), se destruye
 // -------------------------------
 export const actualizarEmprendimiento = async (req, res) => {
   const { id } = req.params;
@@ -251,30 +217,21 @@ export const actualizarEmprendimiento = async (req, res) => {
       return res.status(403).json({ mensaje: 'No tienes permiso para actualizar este emprendimiento' });
     }
 
-    // parsear posible FormData nested
     const parsed = parseFormDataNested(req.body);
-
-    // campos permitidos
     const campos = ['nombreComercial', 'descripcion', 'logo', 'ubicacion', 'contacto', 'categorias', 'estado'];
+
     for (const campo of campos) {
-      // si vino en parsed o en req.body
       const valor = (parsed[campo] !== undefined ? parsed[campo] : req.body[campo]);
       if (valor !== undefined) {
-        // si nombreComercial, recalcular slug único
         if (campo === 'nombreComercial' && valor) {
           emprendimiento.nombreComercial = valor;
           const baseSlug = crearSlugBase(valor);
           emprendimiento.slug = await asegurarSlugUnicoParaUpdate(baseSlug, id);
           continue;
         }
-
-        // asignar ubicacion/contacto correctamente (si vienen como objeto o json string)
         if (campo === 'ubicacion') {
           let ub = valor;
-          if (typeof ub === 'string' && ub.trim().startsWith('{')) {
-            try { ub = JSON.parse(ub); } catch (e) { /* ignore */ }
-          }
-          // parse numericos
+          if (typeof ub === 'string' && ub.trim().startsWith('{')) { try { ub = JSON.parse(ub); } catch {} }
           if (ub && ub.lat !== undefined) ub.lat = ub.lat === '' ? null : Number(ub.lat);
           if (ub && ub.lng !== undefined) ub.lng = ub.lng === '' ? null : Number(ub.lng);
           emprendimiento.ubicacion = { ...emprendimiento.ubicacion, ...ub };
@@ -282,37 +239,38 @@ export const actualizarEmprendimiento = async (req, res) => {
         }
         if (campo === 'contacto') {
           let cont = valor;
-          if (typeof cont === 'string' && cont.trim().startsWith('{')) {
-            try { cont = JSON.parse(cont); } catch (e) { /* ignore */ }
-          }
+          if (typeof cont === 'string' && cont.trim().startsWith('{')) { try { cont = JSON.parse(cont); } catch {} }
           emprendimiento.contacto = { ...emprendimiento.contacto, ...cont };
           continue;
         }
-
         if (campo === 'categorias') {
-          // permitir string JSON o array
           if (typeof valor === 'string') {
-            try { emprendimiento.categorias = JSON.parse(valor); } catch { emprendimiento.categorias = [valor]; }
+            try { emprendimiento.categorias = JSON.parse(valor); }
+            catch { emprendimiento.categorias = [valor]; }
           } else {
             emprendimiento.categorias = valor;
           }
           continue;
         }
-
-        // resto de campos simples
         emprendimiento[campo] = valor;
       }
     }
 
-    // Si multer subió nuevo logo, eliminar el anterior si estaba en /uploads y setear nuevo path
-    if (req.file && req.file.filename) {
-      if (emprendimiento.logo && emprendimiento.logo.startsWith('/uploads')) {
-        eliminarArchivoSiExiste(emprendimiento.logo);
+    // Manejo de logo (Cloudinary)
+    if (req.file?.path) {
+      // Si había logo anterior en Cloudinary, destruirlo
+      if (emprendimiento.logoPublicId) {
+        try { await cloudinary.uploader.destroy(emprendimiento.logoPublicId); } catch (e) { /* log opcional */ }
       }
-      emprendimiento.logo = `/uploads/${req.file.filename}`;
-    } else if (req.body.logo) {
-      // si envían logo por body como URL
-      emprendimiento.logo = req.body.logo;
+      emprendimiento.logo         = req.file.path;     // URL https
+      emprendimiento.logoPublicId = req.file.filename; // public_id
+    } else if (req.body.logo && req.body.logo !== emprendimiento.logo) {
+      // Cambiaron la URL manualmente: si la anterior era Cloudinary y hay public_id, borrar la anterior
+      if (emprendimiento.logoPublicId) {
+        try { await cloudinary.uploader.destroy(emprendimiento.logoPublicId); } catch {}
+      }
+      emprendimiento.logo         = req.body.logo;
+      emprendimiento.logoPublicId = null; // no tenemos public_id de una URL externa
     }
 
     const actualizado = await emprendimiento.save();
@@ -325,7 +283,7 @@ export const actualizarEmprendimiento = async (req, res) => {
 
 // -------------------------------
 // ELIMINAR EMPRENDIMIENTO
-// - borra archivo de logo si estaba en /uploads
+// - si hay logo en Cloudinary (logoPublicId) se destruye
 // -------------------------------
 export const eliminarEmprendimiento = async (req, res) => {
   const { id } = req.params;
@@ -341,9 +299,8 @@ export const eliminarEmprendimiento = async (req, res) => {
       return res.status(403).json({ mensaje: 'No tienes permiso para eliminar este emprendimiento' });
     }
 
-    // eliminar logo si está en uploads
-    if (emprendimiento.logo && emprendimiento.logo.startsWith('/uploads')) {
-      eliminarArchivoSiExiste(emprendimiento.logo);
+    if (emprendimiento.logoPublicId) {
+      try { await cloudinary.uploader.destroy(emprendimiento.logoPublicId); } catch {}
     }
 
     await emprendimiento.deleteOne();
@@ -357,7 +314,7 @@ export const eliminarEmprendimiento = async (req, res) => {
 // -------------------------------
 // OBTENER EMPRENDIMIENTOS PUBLICOS
 // -------------------------------
-export const obtenerEmprendimientosPublicos = async (req, res) => {
+export const obtenerEmprendimientosPublicos = async (_req, res) => {
   try {
     const emprendimientos = await Emprendimiento.find({ estado: 'Activo' })
       .populate('categorias', 'nombre')
