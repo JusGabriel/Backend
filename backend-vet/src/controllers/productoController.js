@@ -12,21 +12,18 @@ function validarNombre(nombre) {
   }
   return null;
 }
-
 function validarPrecio(precio) {
   if (precio === undefined || precio === null || isNaN(precio) || Number(precio) < 0) {
     return 'El precio es obligatorio y debe ser un número igual o mayor a 0';
   }
   return null;
 }
-
 function validarStock(stock) {
   if (stock === undefined || stock === null || isNaN(stock) || !Number.isInteger(Number(stock)) || Number(stock) < 0) {
     return 'El stock debe ser un entero igual o mayor a 0';
   }
   return null;
 }
-
 function validarCategoria(categoria) {
   if (categoria === undefined || categoria === null || categoria === '') return null;
   if (typeof categoria !== 'string' || categoria.trim() === '') {
@@ -34,7 +31,6 @@ function validarCategoria(categoria) {
   }
   return null;
 }
-
 function validarObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
@@ -189,7 +185,7 @@ export const actualizarProducto = async (req, res) => {
       if (producto.imagenPublicId) {
         try { await cloudinary.uploader.destroy(producto.imagenPublicId); } catch {}
       }
-      camposActualizar.imagen = req.file.path;         // URL pública (https)
+      camposActualizar.imagen = req.file.path;             // URL pública (https)
       camposActualizar.imagenPublicId = req.file.filename; // public_id
     } else if (req.body.imagen !== undefined && req.body.imagen !== producto.imagen) {
       // Cambiaron manualmente la URL -> si la anterior era Cloudinary, borra
