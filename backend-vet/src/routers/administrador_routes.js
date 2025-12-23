@@ -40,8 +40,8 @@ router.put('/administradore/actualizarpassword/:id', verificarTokenJWT, actualiz
 router.put(
   '/administradore/foto/:id',
   verificarTokenJWT,
-  setUploadFolder('usuarios/administradores'),  // carpeta en Cloudinary
-  upload.single('foto'),                         // nombre del campo en FormData
+  setUploadFolder('usuarios/administradores'),  // carpeta Cloudinary
+  upload.single('foto'),                         // campo en FormData
   actualizarFotoPerfil
 );
 
