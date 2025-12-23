@@ -1,3 +1,5 @@
+
+// controllers/emprendedor_controllers.js
 import Emprendedor from '../models/Emprendedor.js'
 import {
   sendMailToRegisterEmprendedor,
@@ -8,47 +10,44 @@ import Emprendimiento from '../models/Emprendimiento.js'
 
 import mongoose from "mongoose"
 
-// Funciones internas de validación
+/* ============================
+   Validaciones internas
+============================ */
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || !/^[a-zA-Z\s]+$/.test(nombre.trim())) {
-    return 'El nombre es obligatorio y solo puede contener letras y espacios';
+    return 'El nombre es obligatorio y solo puede contener letras y espacios'
   }
-  return null;
+  return null
 }
 
+// Celular opcional: valida solo si viene con valor
 function validarCelular(celular) {
-  if (!celular || (typeof celular !== 'string' && typeof celular !== 'number')) {
-    return 'El celular es obligatorio y debe ser un número';
+  if (celular == null || celular === '') return null
+  if (typeof celular !== 'string' && typeof celular !== 'number') {
+    return 'El celular debe ser texto o número'
   }
-  const celularStr = celular.toString();
+  const celularStr = celular.toString()
   if (!/^\d{7,15}$/.test(celularStr)) {
-    return 'El celular debe contener solo números y tener entre 7 y 15 dígitos';
+    return 'El celular debe contener solo números y tener entre 7 y 15 dígitos'
   }
-  return null;
+  return null
 }
 
+/* ============================
+   Registro / confirmación / recuperación
+============================ */
 const registro = async (req, res) => {
   const { nombre, telefono, email, password } = req.body
 
-  if (Object.values(req.body).includes("")) {
-    return res.status(400).json({ msg: "Todos los campos son obligatorios" })
+  if ([nombre, email, password].some(v => !v || String(v).trim() === '')) {
+    return res.status(400).json({ msg: "Nombre, email y password son obligatorios" })
   }
 
-  // Validaciones
-  const errorNombre = validarNombre(nombre);
-  if (errorNombre) {
-    return res.status(400).json({ msg: errorNombre });
-  }
-
-  const errorTelefono = validarCelular(telefono);
-  if (errorTelefono) {
-    return res.status(400).json({ msg: errorTelefono });
-  }
+  const e1 = validarNombre(nombre);  if (e1) return res.status(400).json({ msg: e1 })
+  const e2 = validarCelular(telefono); if (e2) return res.status(400).json({ msg: e2 })
 
   const existeEmail = await Emprendedor.findOne({ email })
-  if (existeEmail) {
-    return res.status(400).json({ msg: "Este email ya está registrado" })
-  }
+  if (existeEmail) return res.status(400).json({ msg: "Este email ya está registrado" })
 
   const nuevo = new Emprendedor(req.body)
   nuevo.password = await nuevo.encrypPassword(password)
@@ -75,15 +74,12 @@ const confirmarMail = async (req, res) => {
 
 const recuperarPassword = async (req, res) => {
   const { email } = req.body
-
-  if (Object.values(req.body).includes("")) {
+  if (!email || String(email).trim() === '') {
     return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
   }
 
   const emprendedor = await Emprendedor.findOne({ email })
-  if (!emprendedor) {
-    return res.status(404).json({ msg: "No existe un emprendedor con ese email" })
-  }
+  if (!emprendedor) return res.status(404).json({ msg: "No existe un emprendedor con ese email" })
 
   const token = emprendedor.crearToken()
   emprendedor.token = token
@@ -96,27 +92,22 @@ const recuperarPassword = async (req, res) => {
 const comprobarTokenPasword = async (req, res) => {
   const { token } = req.params
   const emprendedor = await Emprendedor.findOne({ token })
-
   if (emprendedor?.token !== token) {
     return res.status(404).json({ msg: "Token no válido" })
   }
-
   res.status(200).json({ msg: "Token confirmado, ya puedes crear tu nuevo password" })
 }
 
 const crearNuevoPassword = async (req, res) => {
   const { password, confirmpassword } = req.body
-
-  if (Object.values(req.body).includes("")) {
+  if (!password || !confirmpassword) {
     return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
   }
-
   if (password !== confirmpassword) {
     return res.status(404).json({ msg: "Lo sentimos, los passwords no coinciden" })
   }
 
   const emprendedor = await Emprendedor.findOne({ token: req.params.token })
-
   if (emprendedor?.token !== req.params.token) {
     return res.status(404).json({ msg: "Token no válido" })
   }
@@ -128,60 +119,48 @@ const crearNuevoPassword = async (req, res) => {
   res.status(200).json({ msg: "Felicitaciones, ya puedes iniciar sesión con tu nuevo password" })
 }
 
+/* ============================
+   Login
+============================ */
 const login = async (req, res) => {
   const { email, password } = req.body
-
-  if (Object.values(req.body).includes("")) {
+  if (!email || !password) {
     return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
   }
 
   const emprendedorBDD = await Emprendedor.findOne({ email }).select("-__v -token -createdAt -updatedAt")
-
-  if (!emprendedorBDD) {
-    return res.status(404).json({ msg: "El usuario no está registrado" })
-  }
-
+  if (!emprendedorBDD) return res.status(404).json({ msg: "El usuario no está registrado" })
   if (!emprendedorBDD.confirmEmail) {
     return res.status(403).json({ msg: "Debe confirmar su cuenta antes de iniciar sesión" })
   }
 
   const passwordValido = await emprendedorBDD.matchPassword(password)
-  if (!passwordValido) {
-    return res.status(401).json({ msg: "El password es incorrecto" })
-  }
+  if (!passwordValido) return res.status(401).json({ msg: "El password es incorrecto" })
 
   const { nombre, apellido, telefono, _id, rol } = emprendedorBDD
   const token = crearTokenJWT(_id, rol)
 
-  res.status(200).json({
-    token,
-    rol,
-    nombre,
-    apellido,
-    telefono,
-    _id,
-    email: emprendedorBDD.email
-  })
+  res.status(200).json({ token, rol, nombre, apellido, telefono, _id, email: emprendedorBDD.email })
 }
 
+/* ============================
+   Perfil (protegido)
+============================ */
 const perfil = (req, res) => {
   const { token, password, confirmEmail, __v, createdAt, updatedAt, ...datosPerfil } = req.emprendedorBDD
   res.status(200).json(datosPerfil)
 }
 
+/* ============================
+   Actualizar password (protegido)
+============================ */
 const actualizarPassword = async (req, res) => {
   try {
     const emprendedorBDD = await Emprendedor.findById(req.emprendedorBDD._id)
-
-    if (!emprendedorBDD) {
-      return res.status(404).json({ msg: "Emprendedor no encontrado" })
-    }
+    if (!emprendedorBDD) return res.status(404).json({ msg: "Emprendedor no encontrado" })
 
     const verificarPassword = await emprendedorBDD.matchPassword(req.body.passwordactual)
-
-    if (!verificarPassword) {
-      return res.status(400).json({ msg: "El password actual no es correcto" })
-    }
+    if (!verificarPassword) return res.status(400).json({ msg: "El password actual no es correcto" })
 
     emprendedorBDD.password = await emprendedorBDD.encrypPassword(req.body.passwordnuevo)
     await emprendedorBDD.save()
@@ -192,6 +171,9 @@ const actualizarPassword = async (req, res) => {
   }
 }
 
+/* ============================
+   Actualizar perfil (protegido)
+============================ */
 const actualizarPerfil = async (req, res) => {
   const { id } = req.params
   const { nombre, apellido, telefono, email } = req.body
@@ -200,54 +182,48 @@ const actualizarPerfil = async (req, res) => {
     return res.status(404).json({ msg: "ID no válido" })
   }
 
-  if (Object.values(req.body).includes("")) {
+  if ([nombre, apellido, email].some(v => !v || String(v).trim() === '')) {
     return res.status(400).json({ msg: "Todos los campos son obligatorios" })
   }
 
-  // Validaciones
-  const errorNombre = validarNombre(nombre);
-  if (errorNombre) {
-    return res.status(400).json({ msg: errorNombre });
-  }
-
-  const errorTelefono = validarCelular(telefono);
-  if (errorTelefono) {
-    return res.status(400).json({ msg: errorTelefono });
-  }
+  const e1 = validarNombre(nombre);   if (e1) return res.status(400).json({ msg: e1 })
+  const e2 = validarCelular(telefono); if (e2) return res.status(400).json({ msg: e2 })
 
   const emprendedorBDD = await Emprendedor.findById(id)
-  if (!emprendedorBDD) {
-    return res.status(404).json({ msg: "Emprendedor no encontrado" })
-  }
+  if (!emprendedorBDD) return res.status(404).json({ msg: "Emprendedor no encontrado" })
 
   if (emprendedorBDD.email !== email) {
     const emprendedorMail = await Emprendedor.findOne({ email })
-    if (emprendedorMail) {
-      return res.status(400).json({ msg: "El email ya se encuentra registrado" })
-    }
+    if (emprendedorMail) return res.status(400).json({ msg: "El email ya se encuentra registrado" })
   }
 
-  emprendedorBDD.nombre = nombre ?? emprendedorBDD.nombre
+  emprendedorBDD.nombre   = nombre   ?? emprendedorBDD.nombre
   emprendedorBDD.apellido = apellido ?? emprendedorBDD.apellido
   emprendedorBDD.telefono = telefono ?? emprendedorBDD.telefono
-  emprendedorBDD.email = email ?? emprendedorBDD.email
+  emprendedorBDD.email    = email    ?? emprendedorBDD.email
 
   await emprendedorBDD.save()
   res.status(200).json(emprendedorBDD)
 }
 
+/* ============================
+   Listado
+============================ */
 const verEmprendedores = async (req, res) => {
   try {
-    const emprendedores = await Emprendedor.find()
+    const emprendedores = await Emprendedor.find().lean()
+    // Puedes decorar si quieres, pero tu frontend ya usa estado_Emprendedor directamente
     res.status(200).json(emprendedores)
   } catch (error) {
     res.status(500).json({ msg: "Error al obtener los emprendedores" })
   }
 }
 
+/* ============================
+   Actualizar (fallback) + Estado dedicado
+============================ */
 const actualizarEmprendedor = async (req, res) => {
   const { id } = req.params
-
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(404).json({ msg: "ID no válido" })
   }
@@ -256,13 +232,27 @@ const actualizarEmprendedor = async (req, res) => {
     const emprendedor = await Emprendedor.findById(id)
     if (!emprendedor) return res.status(404).json({ msg: "Emprendedor no encontrado" })
 
-    const { nombre, apellido, email, password, telefono } = req.body
+    const { nombre, apellido, email, password, telefono, estado, estado_Emprendedor, status } = req.body
 
-    if (nombre) emprendedor.nombre = nombre
+    if (nombre)   emprendedor.nombre   = nombre
     if (apellido) emprendedor.apellido = apellido
-    if (email) emprendedor.email = email
+    if (email)    emprendedor.email    = email
     if (telefono) emprendedor.telefono = telefono
     if (password) emprendedor.password = await emprendedor.encrypPassword(password)
+
+    // *** Nuevo: soporte de cambio de estado en este endpoint (fallback) ***
+    const nuevoEstado = estado_Emprendedor ?? estado
+    if (nuevoEstado) {
+      try {
+        emprendedor.aplicarEstadoEmprendedor(nuevoEstado)
+      } catch (e) {
+        return res.status(400).json({ msg: e.message })
+      }
+    }
+
+    if (typeof status === 'boolean') {
+      emprendedor.status = status
+    }
 
     const actualizado = await emprendedor.save()
     res.status(200).json(actualizado)
@@ -273,11 +263,9 @@ const actualizarEmprendedor = async (req, res) => {
 
 const eliminarEmprendedor = async (req, res) => {
   const { id } = req.params
-
   try {
     const emprendedor = await Emprendedor.findById(id)
     if (!emprendedor) return res.status(404).json({ msg: "Emprendedor no encontrado" })
-
     await emprendedor.deleteOne()
     res.status(200).json({ msg: "Emprendedor eliminado correctamente" })
   } catch (error) {
@@ -285,7 +273,9 @@ const eliminarEmprendedor = async (req, res) => {
   }
 }
 
-// Agregar emprendimiento a favoritos
+/* ============================
+   Favoritos
+============================ */
 export const agregarAFavoritos = async (req, res) => {
   const emprendedorId = req.emprendedorBDD?._id
   const { emprendimientoId } = req.body
@@ -308,7 +298,6 @@ export const agregarAFavoritos = async (req, res) => {
   }
 }
 
-// Eliminar emprendimiento de favoritos
 export const eliminarDeFavoritos = async (req, res) => {
   const emprendedorId = req.emprendedorBDD?._id
   const { emprendimientoId } = req.params
@@ -324,7 +313,6 @@ export const eliminarDeFavoritos = async (req, res) => {
   }
 }
 
-// Obtener favoritos del emprendedor
 export const obtenerFavoritos = async (req, res) => {
   const emprendedorId = req.emprendedorBDD?._id
 
@@ -343,6 +331,50 @@ export const obtenerFavoritos = async (req, res) => {
   }
 }
 
+/* ============================
+   *** NUEVO *** Editar estado por ID (UI → Modelo)
+   Ruta: PUT /api/emprendedores/estado/:id
+   Body: { estado_Emprendedor: 'Activo|Advertencia1|Advertencia2|Advertencia3|Suspendido' }
+         ó { estado: '...' }
+============================ */
+const ESTADOS_EMPRE = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
+
+const actualizarEstadoEmprendedorById = async (req, res) => {
+  const { id } = req.params
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: 'El ID no es válido' })
+  }
+
+  const { estado, estado_Emprendedor } = req.body
+  const nuevoEstado = estado_Emprendedor ?? estado
+  if (!nuevoEstado) {
+    return res.status(400).json({ msg: 'Debes enviar "estado_Emprendedor" o "estado"' })
+  }
+  if (!ESTADOS_EMPRE.includes(nuevoEstado)) {
+    return res.status(400).json({ msg: `Estado inválido. Permitidos: ${ESTADOS_EMPRE.join(', ')}` })
+  }
+
+  try {
+    const emprendedor = await Emprendedor.findById(id)
+    if (!emprendedor) return res.status(404).json({ msg: 'Emprendedor not encontrado' })
+
+    // Aplica regla de transición
+    emprendedor.aplicarEstadoEmprendedor(nuevoEstado)
+    await emprendedor.save()
+
+    return res.status(200).json({
+      msg: 'Estado actualizado correctamente',
+      estado_Emprendedor: emprendedor.estado_Emprendedor,
+      status: emprendedor.status
+    })
+  } catch (error) {
+    return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
+  }
+}
+
+/* ============================
+   Exports
+============================ */
 export {
   registro,
   confirmarMail,
@@ -355,5 +387,6 @@ export {
   actualizarPerfil,
   verEmprendedores,
   actualizarEmprendedor,
-  eliminarEmprendedor
+  eliminarEmprendedor,
+  actualizarEstadoEmprendedorById
 }
