@@ -1,69 +1,38 @@
+// models/Cliente.js
 import { Schema, model } from 'mongoose'
 import bcrypt from 'bcryptjs'
 
 const clienteSchema = new Schema({
-  nombre: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  apellido: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  email: {
-    type: String,
-    required: true,
-    trim: true,
-    unique: true
-  },
+  nombre: { type: String, required: true, trim: true },
+  apellido: { type: String, required: true, trim: true },
+  email: { type: String, required: true, trim: true, unique: true },
   password: {
     type: String,
-    required: function() {
-        // Requerido solo si NO hay Google OAuth
-        return !this.idGoogle;
+    required: function () {
+      // Requerido solo si NO hay Google OAuth
+      return !this.idGoogle
     }
-    },
-    idGoogle: {
-      type: String,
-      default: null
-    },
-  // Dentro de clienteSchema
-favoritos: [{
-    type: Schema.Types.ObjectId,
-    ref: 'Emprendimiento'
-}],
+  },
+  idGoogle: { type: String, default: null },
 
-  telefono: {
-    type: String,
-    default: null,
-    trim: true
-  },
-  rol:{
-        type:String,
-        default:"Cliente"
-    },
-  token: {
-    type: String,
-    default: null
-  },
-  confirmEmail: {
-    type: Boolean,
-    default: false
-  },
-  status: {
-    type: Boolean,
-    default: true
-  },
+  // Dentro de clienteSchema
+  favoritos: [{ type: Schema.Types.ObjectId, ref: 'Emprendimiento' }],
+
+  telefono: { type: String, default: null, trim: true },
+  rol: { type: String, default: 'Cliente' },
+  token: { type: String, default: null },
+  confirmEmail: { type: Boolean, default: false },
+
+  // Activo/Inactivo
+  status: { type: Boolean, default: true },
+
+  // Advertencias / suspensión
   estado_Emprendedor: {
     type: String,
-    enum: ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido'], 
+    enum: ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido'],
     default: 'Activo'
   }
-}, {
-  timestamps: true
-})
+}, { timestamps: true })
 
 // Métodos del modelo
 clienteSchema.methods.encrypPassword = async function (password) {
@@ -81,4 +50,3 @@ clienteSchema.methods.crearToken = function () {
 }
 
 export default model('Cliente', clienteSchema)
-
