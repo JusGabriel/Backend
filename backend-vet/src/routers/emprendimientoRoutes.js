@@ -16,17 +16,13 @@ import upload, { setUploadFolder } from '../middlewares/upload.js';
 
 const router = Router();
 
-// -----------------------------
-// RUTAS PÚBLICAS
-// -----------------------------
+// Públicas
 router.get('/publicos', obtenerEmprendimientosPublicos);
 router.get('/publico/:slug', obtenerEmprendimientoPorSlug);
 router.get('/s/:slug', obtenerEmprendimientoPorSlug);
 router.get('/:id', obtenerEmprendimiento);
 
-// -----------------------------
-// RUTAS PROTEGIDAS
-// -----------------------------
+// Protegidas
 router.post(
   '/',
   verificarTokenJWT,
