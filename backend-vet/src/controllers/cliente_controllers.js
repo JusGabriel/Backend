@@ -19,9 +19,12 @@ function validarNombre(nombre) {
   return null
 }
 
+// Si tu teléfono es opcional, NO lo marques como obligatorio:
+// Ajusté la validación para que solo valide formato si viene con valor.
 function validarTelefono(telefono) {
-  if (!telefono || (typeof telefono !== 'string' && typeof telefono !== 'number')) {
-    return 'El teléfono es obligatorio y debe ser un número'
+  if (telefono == null || telefono === '') return null
+  if (typeof telefono !== 'string' && typeof telefono !== 'number') {
+    return 'El teléfono debe ser texto o número'
   }
   const telefonoStr = telefono.toString()
   if (!/^\d{7,15}$/.test(telefonoStr)) {
@@ -35,8 +38,8 @@ function validarTelefono(telefono) {
 ============================ */
 const registro = async (req, res) => {
   const { nombre, telefono, email, password } = req.body
-  if (Object.values(req.body).includes('')) {
-    return res.status(400).json({ msg: 'Todos los campos son obligatorios' })
+  if ([nombre, email, password].some(v => !v || String(v).trim() === '')) {
+    return res.status(400).json({ msg: 'Nombre, email y password son obligatorios' })
   }
 
   const e1 = validarNombre(nombre); if (e1) return res.status(400).json({ msg: e1 })
@@ -65,7 +68,7 @@ const confirmarMail = async (req, res) => {
 
 const recuperarPassword = async (req, res) => {
   const { email } = req.body
-  if (Object.values(req.body).includes('')) {
+  if (!email || String(email).trim() === '') {
     return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
   const clienteBDD = await Cliente.findOne({ email })
@@ -89,7 +92,7 @@ const comprobarTokenPasword = async (req, res) => {
 
 const crearNuevoPassword = async (req, res) => {
   const { password, confirmpassword } = req.body
-  if (Object.values(req.body).includes('')) {
+  if (!password || !confirmpassword) {
     return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
   if (password !== confirmpassword) {
@@ -110,7 +113,7 @@ const crearNuevoPassword = async (req, res) => {
 ============================ */
 const login = async (req, res) => {
   const { email, password } = req.body
-  if (Object.values(req.body).includes('')) {
+  if (!email || !password) {
     return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
   const clienteBDD = await Cliente.findOne({ email }).select('-__v -token -updatedAt -createdAt')
@@ -132,11 +135,10 @@ const verClientes = async (req, res) => {
     const clientes = await Cliente.find().lean()
 
     const decorados = clientes.map((c) => {
-      // Derivar etiqueta de UI:
-      // - 'Activo' -> 'Correcto'
-      // - 'AdvertenciaX' -> igual
-      // - 'Suspendido' -> igual
-      // - status=false -> 'Suspendido' (por seguridad)
+      // Derivar etiqueta de UI desde modelo:
+      // - status=false       => 'Suspendido'
+      // - estado_Emprendedor 'Activo' => 'Correcto'
+      // - Advertencia/Suspendido      => igual
       let estadoUI = 'Correcto'
       if (c.status === false) {
         estadoUI = 'Suspendido'
@@ -167,20 +169,42 @@ const actualizarCliente = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    const { nombre, apellido, email, password, telefono } = req.body
+    const { nombre, apellido, email, password, telefono, estado, estado_Cliente, estado_Emprendedor, status } = req.body
 
     if (nombre) {
       const e1 = validarNombre(nombre); if (e1) return res.status(400).json({ msg: e1 })
       cliente.nombre = nombre
     }
-    if (telefono) {
+    if (telefono !== undefined) {
       const e2 = validarTelefono(telefono); if (e2) return res.status(400).json({ msg: e2 })
       cliente.telefono = telefono
     }
 
     if (apellido) cliente.apellido = apellido
-    if (email) cliente.email = email
+    if (email)    cliente.email    = email
     if (password) cliente.password = await cliente.encrypPassword(password)
+
+    // *** Nuevo: permitir cambiar estado también por este endpoint (fallback UI) ***
+    const estadoUI = estado ?? estado_Cliente
+    if (estadoUI) {
+      try {
+        cliente.aplicarEstadoUI(estadoUI)
+      } catch (e) {
+        return res.status(400).json({ msg: e.message })
+      }
+    }
+
+    // Si mandan directamente modelo (no recomendado, pero por compatibilidad):
+    if (estado_Emprendedor) {
+      const vals = ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido']
+      if (!vals.includes(estado_Emprendedor)) {
+        return res.status(400).json({ msg: `estado_Emprendedor inválido. Permitidos: ${vals.join(', ')}` })
+      }
+      cliente.estado_Emprendedor = estado_Emprendedor
+    }
+    if (typeof status === 'boolean') {
+      cliente.status = status
+    }
 
     const actualizado = await cliente.save()
     res.status(200).json(actualizado)
@@ -239,7 +263,7 @@ const actualizarPerfil = async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(404).json({ msg: 'El ID no es válido' })
   }
-  if (Object.values(req.body).includes('')) {
+  if ([nombre, apellido, email].some(v => !v || String(v).trim() === '')) {
     return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
 
@@ -289,28 +313,14 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    // Mapeo UI → modelo
-    // Correcto => Activo + status:true
-    // Advertencias => estado_Emprendedor = AdvertenciaX (status no cambia)
-    // Suspendido => estado_Emprendedor = Suspendido + status:false
-    if (nuevoEstadoUI === 'Correcto') {
-      cliente.estado_Emprendedor = 'Activo'
-      cliente.status = true
-    } else if (nuevoEstadoUI === 'Suspendido') {
-      cliente.estado_Emprendedor = 'Suspendido'
-      cliente.status = false
-    } else {
-      // Advertencias
-      cliente.estado_Emprendedor = nuevoEstadoUI
-      // Opcional: mantener status como esté, o fijarlo en true si quieres que el usuario siga "activo" con advertencia
-      // cliente.status = true
-    }
-
+    // Mapeo UI → modelo usando método seguro
+    cliente.aplicarEstadoUI(nuevoEstadoUI)
     await cliente.save()
 
     // Devuelve ambos por conveniencia
     return res.status(200).json({
       msg: 'Estado actualizado correctamente',
+      estadoUI: nuevoEstadoUI,
       estado_Emprendedor: cliente.estado_Emprendedor,
       status: cliente.status
     })
@@ -320,7 +330,7 @@ const actualizarEstadoClienteById = async (req, res) => {
 }
 
 /* ============================
-   Exports (TODOS definidos, sin duplicados)
+   Exports
 ============================ */
 export {
   registro,
