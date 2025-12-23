@@ -86,7 +86,8 @@ export const obtenerMisEmprendimientos = async (req, res) => {
   const emprendedorId = req.emprendedorBDD?._id;
   try {
     const lista = await Emprendimiento.find({ emprendedor: emprendedorId })
-      .populate('categorias', 'nombre');
+      // .populate('categorias', 'nombre') // ❌ quitar porque no usas Categoria
+      .lean();
     res.json(lista);
   } catch (error) {
     console.error('obtenerMisEmprendimientos error:', error);
@@ -98,15 +99,17 @@ export const obtenerMisEmprendimientos = async (req, res) => {
 export const obtenerEmprendimiento = async (req, res) => {
   try {
     const e = await Emprendimiento.findById(req.params.id)
-      .populate('categorias', 'nombre')
+      // .populate('categorias', 'nombre') // ❌ quitar
       .populate('emprendedor', 'nombre apellido descripcion enlaces')
-      .populate({ path: 'productos', populate: { path: 'categoria', select: 'nombre' } });
+      // Evita populate categoria dentro de productos
+      .populate({ path: 'productos' })
+      .lean();
 
     if (!e) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
     if (e.estado === 'Activo') return res.json(e);
 
     const emprendedorId = req.emprendedorBDD?._id;
-    if (emprendedorId && e.emprendedor.toString() === emprendedorId.toString()) return res.json(e);
+    if (emprendedorId && e.emprendedor?._id?.toString() === emprendedorId.toString()) return res.json(e);
 
     return res.status(403).json({ mensaje: 'No tienes permiso' });
   } catch (error) {
@@ -119,9 +122,10 @@ export const obtenerEmprendimiento = async (req, res) => {
 export const obtenerEmprendimientoPorSlug = async (req, res) => {
   try {
     const e = await Emprendimiento.findOne({ slug: req.params.slug, estado: 'Activo' })
-      .populate('categorias', 'nombre')
+      // .populate('categorias', 'nombre') // ❌ quitar
       .populate('emprendedor', 'nombre apellido descripcion enlaces')
-      .populate({ path: 'productos', populate: { path: 'categoria', select: 'nombre' } });
+      .populate({ path: 'productos' }) // ❌ sin categoria
+      .lean();
 
     if (!e) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
     res.json(e);
@@ -232,8 +236,9 @@ export const eliminarEmprendimiento = async (req, res) => {
 export const obtenerEmprendimientosPublicos = async (_req, res) => {
   try {
     const lista = await Emprendimiento.find({ estado: 'Activo' })
-      .populate('categorias', 'nombre')
-      .populate('emprendedor', 'nombre apellido descripcion enlaces');
+      // .populate('categorias', 'nombre') // ❌ quitar
+      .populate('emprendedor', 'nombre apellido descripcion enlaces')
+      .lean();
     res.json(lista);
   } catch (error) {
     console.error('obtenerEmprendimientosPublicos error:', error);
