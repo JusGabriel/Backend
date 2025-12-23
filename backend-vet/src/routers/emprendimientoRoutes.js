@@ -1,5 +1,5 @@
 
-// routes/emprendimientoRoutes.js
+// routers/emprendimientoRoutes.js
 import { Router } from 'express';
 import {
   crearEmprendimiento,
