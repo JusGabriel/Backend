@@ -41,7 +41,7 @@ router.get("/perfil", verificarTokenJWT, perfil)
 router.put("/cliente/:id", verificarTokenJWT, actualizarPerfil)
 router.put("/cliente/actualizarpassword/:id", verificarTokenJWT, actualizarPassword)
 
-// *** NUEVO: Editar estado del cliente por ID (ruta que usa tu front) ***
+// *** Editar estado del cliente por ID (ruta que usa tu front) ***
 router.put("/estado/:id", /* opcional: verificarTokenJWT, */ actualizarEstadoClienteById)
 
 export default router
