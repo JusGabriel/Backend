@@ -1,220 +1,146 @@
 
 // controllers/emprendimientoController.js
 import Emprendimiento from '../models/Emprendimiento.js';
-import Categoria from '../models/Categoria.js';
 import cloudinary from '../config/cloudinary.js';
 
-// -------------------------------
-// Helpers: slug
-// -------------------------------
-const crearSlugBase = (texto) => {
-  return texto
-    .toString()
-    .toLowerCase()
-    .trim()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/[^\w\-]+/g, '')
+// Helpers slug
+const crearSlugBase = (texto = '') =>
+  texto.toString().toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '-').replace(/[^\w\-]+/g, '')
     .replace(/\-\-+/g, '-');
-};
 
 const asegurarSlugUnico = async (baseSlug) => {
-  let slug = baseSlug;
-  let i = 1;
+  let slug = baseSlug, i = 1;
   while (await Emprendimiento.findOne({ slug })) {
-    slug = `${baseSlug}-${i}`;
-    i++;
+    slug = `${baseSlug}-${i++}`;
   }
   return slug;
 };
-
 const asegurarSlugUnicoParaUpdate = async (baseSlug, excludeId) => {
-  let slug = baseSlug;
-  let i = 1;
+  let slug = baseSlug, i = 1;
   while (await Emprendimiento.findOne({ slug, _id: { $ne: excludeId } })) {
-    slug = `${baseSlug}-${i}`;
-    i++;
+    slug = `${baseSlug}-${i++}`;
   }
   return slug;
 };
 
-// -------------------------------
-// Util: parsear fields tipo "ubicacion[direccion]" desde req.body (FormData style)
-// -------------------------------
-const parseFormDataNested = (body) => {
-  const ubicacion = {};
-  const contacto = {};
-  const result = {};
-
+// Parse FormData anidado ubicacion[lat]...
+const parseFormDataNested = (body = {}) => {
+  const ubicacion = {}, contacto = {}, result = {};
   for (const k of Object.keys(body)) {
     const mU = k.match(/^ubicacion\[(.+)\]$/);
     if (mU) { ubicacion[mU[1]] = body[k]; continue; }
-
     const mC = k.match(/^contacto\[(.+)\]$/);
     if (mC) { contacto[mC[1]] = body[k]; continue; }
-
     if (k === 'categorias') {
       try { result.categorias = JSON.parse(body[k]); }
       catch { result.categorias = Array.isArray(body[k]) ? body[k] : [body[k]]; }
       continue;
     }
-
     result[k] = body[k];
   }
-
-  if (Object.keys(ubicacion).length > 0) {
+  if (Object.keys(ubicacion).length) {
     if (ubicacion.lat !== undefined && ubicacion.lat !== '') ubicacion.lat = Number(ubicacion.lat);
     if (ubicacion.lng !== undefined && ubicacion.lng !== '') ubicacion.lng = Number(ubicacion.lng);
     result.ubicacion = { ...ubicacion };
   }
-  if (Object.keys(contacto).length > 0) {
-    result.contacto = { ...contacto };
-  }
-
+  if (Object.keys(contacto).length) result.contacto = { ...contacto };
   return result;
 };
 
-// -------------------------------
-// CREAR EMPRENDIMIENTO
-// - acepta logo mediante req.file (multer) o req.body.logo (URL pública)
-// -------------------------------
+// Crear
 export const crearEmprendimiento = async (req, res) => {
   const parsed = parseFormDataNested(req.body);
-  const nombreComercial = parsed.nombreComercial || req.body.nombreComercial;
-  const descripcion     = parsed.descripcion     || req.body.descripcion || '';
-  const ubicacion       = parsed.ubicacion       || req.body.ubicacion || {};
-  const contacto        = parsed.contacto        || req.body.contacto || {};
-  const categorias      = parsed.categorias      || req.body.categorias || [];
-
   const emprendedorId = req.emprendedorBDD?._id;
-  if (!emprendedorId) {
-    return res.status(401).json({ mensaje: 'No autorizado: debes ser un emprendedor autenticado' });
-  }
+  if (!emprendedorId) return res.status(401).json({ mensaje: 'No autorizado' });
 
   try {
-    const baseSlug = crearSlugBase(nombreComercial || '');
+    const baseSlug = crearSlugBase(parsed.nombreComercial || req.body.nombreComercial || '');
     const slug     = await asegurarSlugUnico(baseSlug);
 
-    // Resolver logo (Cloudinary)
-    const logoUrl      = req.file?.path || req.body.logo || null;     // URL pública
-    const logoPublicId = req.file?.filename || null;                  // public_id (solo si subió archivo)
+    const logoUrl      = req.file?.path || req.body.logo || null;     // URL pública (Cloudinary o externa)
+    const logoPublicId = req.file?.filename || null;                  // public_id (Cloudinary)
 
-    const nuevoEmprendimiento = new Emprendimiento({
-      nombreComercial,
+    const doc = await Emprendimiento.create({
+      nombreComercial: parsed.nombreComercial || req.body.nombreComercial,
       slug,
-      descripcion,
+      descripcion: parsed.descripcion || req.body.descripcion || '',
       logo: logoUrl,
       logoPublicId,
-      ubicacion,
-      contacto,
-      categorias,
+      ubicacion: parsed.ubicacion || req.body.ubicacion || {},
+      contacto:  parsed.contacto  || req.body.contacto  || {},
+      categorias: parsed.categorias || req.body.categorias || [],
       emprendedor: emprendedorId
     });
 
-    const guardado = await nuevoEmprendimiento.save();
-    res.status(201).json({ mensaje: 'Emprendimiento creado correctamente', emprendimiento: guardado });
+    res.status(201).json({ mensaje: 'Emprendimiento creado correctamente', emprendimiento: doc });
   } catch (error) {
     console.error('crearEmprendimiento error:', error);
     res.status(500).json({ mensaje: 'Error al crear emprendimiento', error: error.message });
   }
 };
 
-// -------------------------------
-// OBTENER MIS EMPRENDIMIENTOS
-// -------------------------------
+// Obtener mis
 export const obtenerMisEmprendimientos = async (req, res) => {
   const emprendedorId = req.emprendedorBDD?._id;
-
   try {
-    const emprendimientos = await Emprendimiento.find({ emprendedor: emprendedorId })
+    const lista = await Emprendimiento.find({ emprendedor: emprendedorId })
       .populate('categorias', 'nombre');
-    res.json(emprendimientos);
+    res.json(lista);
   } catch (error) {
     console.error('obtenerMisEmprendimientos error:', error);
     res.status(500).json({ mensaje: 'Error al obtener emprendimientos', error: error.message });
   }
 };
 
-// -------------------------------
-// OBTENER EMPRENDIMIENTO POR ID
-// -------------------------------
+// Obtener por id (respeta estado)
 export const obtenerEmprendimiento = async (req, res) => {
-  const { id } = req.params;
-
   try {
-    const emprendimiento = await Emprendimiento.findById(id)
+    const e = await Emprendimiento.findById(req.params.id)
       .populate('categorias', 'nombre')
       .populate('emprendedor', 'nombre apellido descripcion enlaces')
-      .populate({
-        path: 'productos',
-        populate: { path: 'categoria', select: 'nombre' }
-      });
+      .populate({ path: 'productos', populate: { path: 'categoria', select: 'nombre' } });
 
-    if (!emprendimiento) {
-      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
-    }
-
-    if (emprendimiento.estado === 'Activo') {
-      return res.json(emprendimiento);
-    }
+    if (!e) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
+    if (e.estado === 'Activo') return res.json(e);
 
     const emprendedorId = req.emprendedorBDD?._id;
+    if (emprendedorId && e.emprendedor.toString() === emprendedorId.toString()) return res.json(e);
 
-    if (emprendedorId && emprendimiento.emprendedor.toString() === emprendedorId.toString()) {
-      return res.json(emprendimiento);
-    }
-
-    return res.status(403).json({ mensaje: 'No tienes permiso para ver este emprendimiento' });
+    return res.status(403).json({ mensaje: 'No tienes permiso' });
   } catch (error) {
     console.error('obtenerEmprendimiento error:', error);
-    res.status(500).json({ mensaje: 'Error al obtener emprendimiento', error: error.message });
+    res.status(500).json({ mensaje: 'Error', error: error.message });
   }
 };
 
-// -------------------------------
-// OBTENER EMPRENDIMIENTO POR SLUG (PÚBLICO)
-// -------------------------------
+// Público por slug
 export const obtenerEmprendimientoPorSlug = async (req, res) => {
-  const { slug } = req.params;
-
   try {
-    const emprendimiento = await Emprendimiento.findOne({ slug, estado: 'Activo' })
+    const e = await Emprendimiento.findOne({ slug: req.params.slug, estado: 'Activo' })
       .populate('categorias', 'nombre')
       .populate('emprendedor', 'nombre apellido descripcion enlaces')
-      .populate({
-        path: 'productos',
-        populate: { path: 'categoria', select: 'nombre' }
-      });
+      .populate({ path: 'productos', populate: { path: 'categoria', select: 'nombre' } });
 
-    if (!emprendimiento) {
-      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
-    }
-
-    res.json(emprendimiento);
+    if (!e) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
+    res.json(e);
   } catch (error) {
     console.error('obtenerEmprendimientoPorSlug error:', error);
-    res.status(500).json({ mensaje: 'Error al obtener emprendimiento por URL', error: error.message });
+    res.status(500).json({ mensaje: 'Error', error: error.message });
   }
 };
 
-// -------------------------------
-// ACTUALIZAR EMPRENDIMIENTO
-// - acepta logo nuevo en req.file o URL nueva en body
-// - si hay logo anterior en Cloudinary (logoPublicId), se destruye
-// -------------------------------
+// Actualizar
 export const actualizarEmprendimiento = async (req, res) => {
   const { id } = req.params;
   const emprendedorId = req.emprendedorBDD?._id;
 
   try {
-    const emprendimiento = await Emprendimiento.findById(id);
-    if (!emprendimiento) {
-      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
-    }
-
-    if (emprendimiento.emprendedor.toString() !== emprendedorId.toString()) {
-      return res.status(403).json({ mensaje: 'No tienes permiso para actualizar este emprendimiento' });
+    const e = await Emprendimiento.findById(id);
+    if (!e) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
+    if (e.emprendedor.toString() !== emprendedorId.toString()) {
+      return res.status(403).json({ mensaje: 'Sin permiso' });
     }
 
     const parsed = parseFormDataNested(req.body);
@@ -224,105 +150,93 @@ export const actualizarEmprendimiento = async (req, res) => {
       const valor = (parsed[campo] !== undefined ? parsed[campo] : req.body[campo]);
       if (valor !== undefined) {
         if (campo === 'nombreComercial' && valor) {
-          emprendimiento.nombreComercial = valor;
-          const baseSlug = crearSlugBase(valor);
-          emprendimiento.slug = await asegurarSlugUnicoParaUpdate(baseSlug, id);
+          e.nombreComercial = valor;
+          e.slug = await asegurarSlugUnicoParaUpdate(crearSlugBase(valor), id);
           continue;
         }
         if (campo === 'ubicacion') {
           let ub = valor;
           if (typeof ub === 'string' && ub.trim().startsWith('{')) { try { ub = JSON.parse(ub); } catch {} }
-          if (ub && ub.lat !== undefined) ub.lat = ub.lat === '' ? null : Number(ub.lat);
-          if (ub && ub.lng !== undefined) ub.lng = ub.lng === '' ? null : Number(ub.lng);
-          emprendimiento.ubicacion = { ...emprendimiento.ubicacion, ...ub };
+          if (ub?.lat !== undefined) ub.lat = ub.lat === '' ? null : Number(ub.lat);
+          if (ub?.lng !== undefined) ub.lng = ub.lng === '' ? null : Number(ub.lng);
+          e.ubicacion = { ...e.ubicacion, ...ub };
           continue;
         }
         if (campo === 'contacto') {
           let cont = valor;
           if (typeof cont === 'string' && cont.trim().startsWith('{')) { try { cont = JSON.parse(cont); } catch {} }
-          emprendimiento.contacto = { ...emprendimiento.contacto, ...cont };
+          e.contacto = { ...e.contacto, ...cont };
           continue;
         }
         if (campo === 'categorias') {
           if (typeof valor === 'string') {
-            try { emprendimiento.categorias = JSON.parse(valor); }
-            catch { emprendimiento.categorias = [valor]; }
+            try { e.categorias = JSON.parse(valor); }
+            catch { e.categorias = [valor]; }
           } else {
-            emprendimiento.categorias = valor;
+            e.categorias = valor;
           }
           continue;
         }
-        emprendimiento[campo] = valor;
+        e[campo] = valor;
       }
     }
 
-    // Manejo de logo (Cloudinary)
+    // Logo (Cloudinary): si suben nuevo archivo, destruye el anterior
     if (req.file?.path) {
-      // Si había logo anterior en Cloudinary, destruirlo
-      if (emprendimiento.logoPublicId) {
-        try { await cloudinary.uploader.destroy(emprendimiento.logoPublicId); } catch (e) { /* log opcional */ }
+      if (e.logoPublicId) {
+        try { await cloudinary.uploader.destroy(e.logoPublicId); } catch {}
       }
-      emprendimiento.logo         = req.file.path;     // URL https
-      emprendimiento.logoPublicId = req.file.filename; // public_id
-    } else if (req.body.logo && req.body.logo !== emprendimiento.logo) {
-      // Cambiaron la URL manualmente: si la anterior era Cloudinary y hay public_id, borrar la anterior
-      if (emprendimiento.logoPublicId) {
-        try { await cloudinary.uploader.destroy(emprendimiento.logoPublicId); } catch {}
+      e.logo         = req.file.path;
+      e.logoPublicId = req.file.filename;
+    } else if (req.body.logo && req.body.logo !== e.logo) {
+      if (e.logoPublicId) {
+        try { await cloudinary.uploader.destroy(e.logoPublicId); } catch {}
       }
-      emprendimiento.logo         = req.body.logo;
-      emprendimiento.logoPublicId = null; // no tenemos public_id de una URL externa
+      e.logo         = req.body.logo;
+      e.logoPublicId = null;
     }
 
-    const actualizado = await emprendimiento.save();
+    const actualizado = await e.save();
     res.json({ mensaje: 'Emprendimiento actualizado', emprendimiento: actualizado });
   } catch (error) {
     console.error('actualizarEmprendimiento error:', error);
-    res.status(500).json({ mensaje: 'Error al actualizar emprendimiento', error: error.message });
+    res.status(500).json({ mensaje: 'Error', error: error.message });
   }
 };
 
-// -------------------------------
-// ELIMINAR EMPRENDIMIENTO
-// - si hay logo en Cloudinary (logoPublicId) se destruye
-// -------------------------------
+// Eliminar
 export const eliminarEmprendimiento = async (req, res) => {
   const { id } = req.params;
   const emprendedorId = req.emprendedorBDD?._id;
 
   try {
-    const emprendimiento = await Emprendimiento.findById(id);
-    if (!emprendimiento) {
-      return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
+    const e = await Emprendimiento.findById(id);
+    if (!e) return res.status(404).json({ mensaje: 'Emprendimiento no encontrado' });
+    if (e.emprendedor.toString() !== emprendedorId.toString()) {
+      return res.status(403).json({ mensaje: 'Sin permiso' });
     }
 
-    if (emprendimiento.emprendedor.toString() !== emprendedorId.toString()) {
-      return res.status(403).json({ mensaje: 'No tienes permiso para eliminar este emprendimiento' });
+    if (e.logoPublicId) {
+      try { await cloudinary.uploader.destroy(e.logoPublicId); } catch {}
     }
 
-    if (emprendimiento.logoPublicId) {
-      try { await cloudinary.uploader.destroy(emprendimiento.logoPublicId); } catch {}
-    }
-
-    await emprendimiento.deleteOne();
+    await e.deleteOne();
     res.json({ mensaje: 'Emprendimiento eliminado correctamente' });
   } catch (error) {
     console.error('eliminarEmprendimiento error:', error);
-    res.status(500).json({ mensaje: 'Error al eliminar emprendimiento', error: error.message });
+    res.status(500).json({ mensaje: 'Error', error: error.message });
   }
 };
 
-// -------------------------------
-// OBTENER EMPRENDIMIENTOS PUBLICOS
-// -------------------------------
+// Públicos
 export const obtenerEmprendimientosPublicos = async (_req, res) => {
   try {
-    const emprendimientos = await Emprendimiento.find({ estado: 'Activo' })
+    const lista = await Emprendimiento.find({ estado: 'Activo' })
       .populate('categorias', 'nombre')
       .populate('emprendedor', 'nombre apellido descripcion enlaces');
-
-    res.json(emprendimientos);
+    res.json(lista);
   } catch (error) {
     console.error('obtenerEmprendimientosPublicos error:', error);
-    res.status(500).json({ mensaje: 'Error al obtener emprendimientos públicos', error: error.message });
+    res.status(500).json({ mensaje: 'Error', error: error.message });
   }
 };
