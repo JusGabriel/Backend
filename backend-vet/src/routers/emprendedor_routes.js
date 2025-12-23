@@ -1,5 +1,3 @@
-
-// routes/emprendedor_rutas.js
 import { Router } from "express"
 import {
   registro,
@@ -13,8 +11,7 @@ import {
   actualizarPerfil,
   verEmprendedores,
   actualizarEmprendedor,
-  eliminarEmprendedor,
-  actualizarEstadoEmprendedorById
+  eliminarEmprendedor
 } from "../controllers/emprendedor_controllers.js"
 import { verificarTokenJWT } from '../middleware/JWT.js'
 
@@ -34,15 +31,15 @@ router.post('/login', login)
 
 // Perfil autenticado y acciones protegidas
 router.get('/perfil', verificarTokenJWT, perfil)
-router.put('/emprendedore/:id', verificarTokenJWT, actualizarPerfil)                   // (tu ruta existente)
+router.put('/emprendedore/:id', verificarTokenJWT, actualizarPerfil)
 router.put('/emprendedore/actualizarpassword/:id', verificarTokenJWT, actualizarPassword)
 
-// CRUD emprendedores
+// CRUD emprendedores (solo para admins o uso general)
 router.get("/todos", verEmprendedores)
 router.put('/actualizar/:id', verificarTokenJWT, actualizarEmprendedor)
 router.delete('/eliminar/:id', eliminarEmprendedor)
 
-// *** NUEVO *** Editar estado del emprendedor por ID (usado por tu front) ***
-router.put("/estado/:id", /* opcional: verificarTokenJWT, */ actualizarEstadoEmprendedorById)
-
 export default router
+
+
+
