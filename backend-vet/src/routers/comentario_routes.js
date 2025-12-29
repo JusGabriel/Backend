@@ -12,7 +12,7 @@ import { verificarTokenJWT } from '../middleware/JWT.js';
 
 const router = Router();
 
-// Crear comentario (requiere JWT válido de Cliente/Emprendedor/Administrador)
+// Crear comentario (JWT)
 router.post('/', verificarTokenJWT, crearComentario);
 
 // Listar comentarios de un Producto (público)
@@ -21,7 +21,7 @@ router.get('/producto/:id', listarComentariosProducto);
 // Listar comentarios de un Emprendimiento (público)
 router.get('/emprendimiento/:id', listarComentariosEmprendimiento);
 
-// Eliminar comentario (autor o Admin; requiere JWT)
+// Eliminar comentario (autor o Admin; JWT)
 router.delete('/:id', verificarTokenJWT, eliminarComentario);
 
 export default router;
