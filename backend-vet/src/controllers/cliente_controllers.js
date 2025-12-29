@@ -108,6 +108,7 @@ const crearNuevoPassword = async (req, res) => {
   res.status(200).json({ msg: 'Ya puedes iniciar sesión con tu nuevo password' })
 }
 
+
 /* ============================
    Login
 ============================ */
@@ -116,16 +117,57 @@ const login = async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
+
   const clienteBDD = await Cliente.findOne({ email }).select('-__v -token -updatedAt -createdAt')
   if (!clienteBDD) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
   if (!clienteBDD.confirmEmail) return res.status(403).json({ msg: 'Debe verificar su cuenta' })
+
   const ok = await clienteBDD.matchPassword(password)
   if (!ok) return res.status(401).json({ msg: 'El password no es el correcto' })
 
+  // 🔎 Derivar estado UI (Correcto / Advertencia1-3 / Suspendido) con la misma lógica que usas en verClientes
+  let estadoUI = 'Correcto'
+  if (clienteBDD.status === false) {
+    estadoUI = 'Suspendido'
+  } else {
+    const e = clienteBDD.estado_Emprendedor
+    if (['Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido'].includes(e)) {
+      estadoUI = e
+    } else {
+      estadoUI = 'Correcto' // Activo
+    }
+  }
+
+  // 🚫 Bloquear login si está suspendido (sin token)
+  if (estadoUI === 'Suspendido') {
+    return res.status(403).json({
+      msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.',
+      estadoUI,
+      estado_Emprendedor: clienteBDD.estado_Emprendedor,
+      status: clienteBDD.status
+    })
+  }
+
+  // ✅ Login permitido: devolver token + estado (sin tocar crearTokenJWT)
   const { nombre, apellido, direccion, telefono, _id, rol } = clienteBDD
   const token = crearTokenJWT(clienteBDD._id, clienteBDD.rol)
-  res.status(200).json({ token, rol, nombre, apellido, direccion, telefono, _id, email: clienteBDD.email })
+
+  res.status(200).json({
+    token,
+    rol,
+    nombre,
+    apellido,
+    direccion,
+    telefono,
+    _id,
+    email: clienteBDD.email,
+    // 👉 incluir estado para que el frontend lo persista y muestre avisos
+    estadoUI,
+    estado_Emprendedor: clienteBDD.estado_Emprendedor,
+    status: clienteBDD.status
+  })
 }
+
 
 /* ============================
    Listado (decorado para UI)
@@ -347,3 +389,4 @@ export {
   actualizarPerfil,
   actualizarEstadoClienteById
 }
+
