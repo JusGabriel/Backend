@@ -18,6 +18,7 @@ import quejaRoutes from './routers/quejaRoutes.js';
 import emprendimientoRoutes from './routers/emprendimientoRoutes.js';
 import favoritoRoutes from './routers/favoritoRoutes.js';
 import favoritosEmprendedorRoutes from './routers/favoritosEmprendedorRoutes.js';
+import comentarioRoutes from './routers/comentario_routes.js';
 import path from 'path';
 import searchRoutes from './routers/search_routes.js';
 import multer from 'multer'; // 👈 para detectar errores de Multer
@@ -170,6 +171,7 @@ app.use('/api/quejas', quejaRoutes);
 app.use('/api/emprendimientos', emprendimientoRoutes);
 app.use('/api/favoritos', favoritoRoutes);
 app.use('/api/emprendedor/favoritos', favoritosEmprendedorRoutes);
+app.use('/api/comentarios', comentarioRoutes);
 
 // 👉 NUEVO: monta el router del buscador
 //     Esto expone:
@@ -242,4 +244,5 @@ app.use((req, res) => {
 });
 
 export default app;
+
 
