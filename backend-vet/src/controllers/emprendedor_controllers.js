@@ -4,11 +4,10 @@ import Emprendedor from '../models/Emprendedor.js'
 import {
   sendMailToRegisterEmprendedor,
   sendMailToRecoveryPasswordEmprendedor
-} from "../config/nodemailerEmprendedor.js"
-import { crearTokenJWT } from "../middleware/JWT.js"
+} from '../config/nodemailerEmprendedor.js'
+import { crearTokenJWT } from '../middleware/JWT.js'
 import Emprendimiento from '../models/Emprendimiento.js'
-
-import mongoose from "mongoose"
+import mongoose from 'mongoose'
 
 /* ============================
    Validaciones internas
@@ -20,7 +19,7 @@ function validarNombre(nombre) {
   return null
 }
 
-// Celular opcional: valida solo si viene con valor
+// Celular/telefono opcional: valida formato solo si viene con valor
 function validarCelular(celular) {
   if (celular == null || celular === '') return null
   if (typeof celular !== 'string' && typeof celular !== 'number') {
@@ -40,14 +39,14 @@ const registro = async (req, res) => {
   const { nombre, telefono, email, password } = req.body
 
   if ([nombre, email, password].some(v => !v || String(v).trim() === '')) {
-    return res.status(400).json({ msg: "Nombre, email y password son obligatorios" })
+    return res.status(400).json({ msg: 'Nombre, email y password son obligatorios' })
   }
 
-  const e1 = validarNombre(nombre);  if (e1) return res.status(400).json({ msg: e1 })
+  const e1 = validarNombre(nombre);   if (e1) return res.status(400).json({ msg: e1 })
   const e2 = validarCelular(telefono); if (e2) return res.status(400).json({ msg: e2 })
 
   const existeEmail = await Emprendedor.findOne({ email })
-  if (existeEmail) return res.status(400).json({ msg: "Este email ya está registrado" })
+  if (existeEmail) return res.status(400).json({ msg: 'Este email ya está registrado' })
 
   const nuevo = new Emprendedor(req.body)
   nuevo.password = await nuevo.encrypPassword(password)
@@ -56,91 +55,126 @@ const registro = async (req, res) => {
   await sendMailToRegisterEmprendedor(email, token)
   await nuevo.save()
 
-  res.status(200).json({ msg: "Revisa tu correo electrónico para confirmar tu cuenta" })
+  res.status(200).json({ msg: 'Revisa tu correo electrónico para confirmar tu cuenta' })
 }
 
 const confirmarMail = async (req, res) => {
   const { token } = req.params
   const emprendedorBDD = await Emprendedor.findOne({ token })
 
-  if (!emprendedorBDD) return res.status(404).json({ msg: "Token inválido" })
+  if (!emprendedorBDD) return res.status(404).json({ msg: 'Token inválido' })
 
   emprendedorBDD.token = null
   emprendedorBDD.confirmEmail = true
   await emprendedorBDD.save()
 
-  res.status(200).json({ msg: "Cuenta confirmada correctamente" })
+  res.status(200).json({ msg: 'Cuenta confirmada correctamente' })
 }
 
 const recuperarPassword = async (req, res) => {
   const { email } = req.body
   if (!email || String(email).trim() === '') {
-    return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
+    return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
 
   const emprendedor = await Emprendedor.findOne({ email })
-  if (!emprendedor) return res.status(404).json({ msg: "No existe un emprendedor con ese email" })
+  if (!emprendedor) return res.status(404).json({ msg: 'No existe un emprendedor con ese email' })
 
   const token = emprendedor.crearToken()
   emprendedor.token = token
   await sendMailToRecoveryPasswordEmprendedor(email, token)
   await emprendedor.save()
 
-  res.status(200).json({ msg: "Revisa tu correo electrónico para reestablecer tu cuenta" })
+  res.status(200).json({ msg: 'Revisa tu correo electrónico para reestablecer tu cuenta' })
 }
 
 const comprobarTokenPasword = async (req, res) => {
   const { token } = req.params
   const emprendedor = await Emprendedor.findOne({ token })
   if (emprendedor?.token !== token) {
-    return res.status(404).json({ msg: "Token no válido" })
+    return res.status(404).json({ msg: 'Token no válido' })
   }
-  res.status(200).json({ msg: "Token confirmado, ya puedes crear tu nuevo password" })
+  res.status(200).json({ msg: 'Token confirmado, ya puedes crear tu nuevo password' })
 }
 
 const crearNuevoPassword = async (req, res) => {
   const { password, confirmpassword } = req.body
   if (!password || !confirmpassword) {
-    return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
+    return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
   if (password !== confirmpassword) {
-    return res.status(404).json({ msg: "Lo sentimos, los passwords no coinciden" })
+    return res.status(400).json({ msg: 'Los passwords no coinciden' })
   }
 
   const emprendedor = await Emprendedor.findOne({ token: req.params.token })
   if (emprendedor?.token !== req.params.token) {
-    return res.status(404).json({ msg: "Token no válido" })
+    return res.status(404).json({ msg: 'Token no válido' })
   }
 
   emprendedor.token = null
   emprendedor.password = await emprendedor.encrypPassword(password)
   await emprendedor.save()
 
-  res.status(200).json({ msg: "Felicitaciones, ya puedes iniciar sesión con tu nuevo password" })
+  res.status(200).json({ msg: 'Felicitaciones, ya puedes iniciar sesión con tu nuevo password' })
 }
 
 /* ============================
-   Login
+   Login (con estadoUI y bloqueo si Suspendido)
 ============================ */
 const login = async (req, res) => {
   const { email, password } = req.body
   if (!email || !password) {
-    return res.status(404).json({ msg: "Lo sentimos, debes llenar todos los campos" })
+    return res.status(400).json({ msg: 'Debes llenar todos los campos' })
   }
 
-  const emprendedorBDD = await Emprendedor.findOne({ email }).select("-__v -token -createdAt -updatedAt")
-  if (!emprendedorBDD) return res.status(404).json({ msg: "El usuario no está registrado" })
+  const emprendedorBDD = await Emprendedor.findOne({ email }).select('-__v -token -createdAt -updatedAt')
+  if (!emprendedorBDD) return res.status(404).json({ msg: 'El usuario no está registrado' })
   if (!emprendedorBDD.confirmEmail) {
-    return res.status(403).json({ msg: "Debe confirmar su cuenta antes de iniciar sesión" })
+    return res.status(403).json({ msg: 'Debe confirmar su cuenta antes de iniciar sesión' })
   }
 
   const passwordValido = await emprendedorBDD.matchPassword(password)
-  if (!passwordValido) return res.status(401).json({ msg: "El password es incorrecto" })
+  if (!passwordValido) return res.status(401).json({ msg: 'El password es incorrecto' })
 
+  // 🔎 Derivar estado UI igual que en cliente_controllers.js
+  let estadoUI = 'Correcto'
+  if (emprendedorBDD.status === false) {
+    estadoUI = 'Suspendido'
+  } else {
+    const e = emprendedorBDD.estado_Emprendedor
+    if (['Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido'].includes(e)) {
+      estadoUI = e
+    } else {
+      estadoUI = 'Correcto' // Activo
+    }
+  }
+
+  // 🚫 Bloquear login si está suspendido (sin token)
+  if (estadoUI === 'Suspendido') {
+    return res.status(403).json({
+      msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.',
+      estadoUI,
+      estado_Emprendedor: emprendedorBDD.estado_Emprendedor,
+      status: emprendedorBDD.status
+    })
+  }
+
+  // ✅ Login permitido: devolver token + estado (sin tocar crearTokenJWT)
   const { nombre, apellido, telefono, _id, rol } = emprendedorBDD
   const token = crearTokenJWT(_id, rol)
 
-  res.status(200).json({ token, rol, nombre, apellido, telefono, _id, email: emprendedorBDD.email })
+  res.status(200).json({
+    token,
+    rol,
+    nombre,
+    apellido,
+    telefono,
+    _id,
+    email: emprendedorBDD.email,
+    estadoUI,
+    estado_Emprendedor: emprendedorBDD.estado_Emprendedor,
+    status: emprendedorBDD.status
+  })
 }
 
 /* ============================
@@ -157,17 +191,17 @@ const perfil = (req, res) => {
 const actualizarPassword = async (req, res) => {
   try {
     const emprendedorBDD = await Emprendedor.findById(req.emprendedorBDD._id)
-    if (!emprendedorBDD) return res.status(404).json({ msg: "Emprendedor no encontrado" })
+    if (!emprendedorBDD) return res.status(404).json({ msg: 'Emprendedor no encontrado' })
 
     const verificarPassword = await emprendedorBDD.matchPassword(req.body.passwordactual)
-    if (!verificarPassword) return res.status(400).json({ msg: "El password actual no es correcto" })
+    if (!verificarPassword) return res.status(400).json({ msg: 'El password actual no es correcto' })
 
     emprendedorBDD.password = await emprendedorBDD.encrypPassword(req.body.passwordnuevo)
     await emprendedorBDD.save()
 
-    res.status(200).json({ msg: "Password actualizado correctamente" })
+    res.status(200).json({ msg: 'Password actualizado correctamente' })
   } catch (error) {
-    res.status(500).json({ msg: "Error al actualizar el password" })
+    res.status(500).json({ msg: 'Error al actualizar el password' })
   }
 }
 
@@ -179,22 +213,22 @@ const actualizarPerfil = async (req, res) => {
   const { nombre, apellido, telefono, email } = req.body
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(404).json({ msg: "ID no válido" })
+    return res.status(404).json({ msg: 'ID no válido' })
   }
 
   if ([nombre, apellido, email].some(v => !v || String(v).trim() === '')) {
-    return res.status(400).json({ msg: "Todos los campos son obligatorios" })
+    return res.status(400).json({ msg: 'Todos los campos son obligatorios' })
   }
 
-  const e1 = validarNombre(nombre);   if (e1) return res.status(400).json({ msg: e1 })
+  const e1 = validarNombre(nombre);    if (e1) return res.status(400).json({ msg: e1 })
   const e2 = validarCelular(telefono); if (e2) return res.status(400).json({ msg: e2 })
 
   const emprendedorBDD = await Emprendedor.findById(id)
-  if (!emprendedorBDD) return res.status(404).json({ msg: "Emprendedor no encontrado" })
+  if (!emprendedorBDD) return res.status(404).json({ msg: 'Emprendedor no encontrado' })
 
   if (emprendedorBDD.email !== email) {
     const emprendedorMail = await Emprendedor.findOne({ email })
-    if (emprendedorMail) return res.status(400).json({ msg: "El email ya se encuentra registrado" })
+    if (emprendedorMail) return res.status(400).json({ msg: 'El email ya se encuentra registrado' })
   }
 
   emprendedorBDD.nombre   = nombre   ?? emprendedorBDD.nombre
@@ -207,15 +241,31 @@ const actualizarPerfil = async (req, res) => {
 }
 
 /* ============================
-   Listado
+   Listado (decorado para UI)
 ============================ */
 const verEmprendedores = async (req, res) => {
   try {
     const emprendedores = await Emprendedor.find().lean()
-    // Puedes decorar si quieres, pero tu frontend ya usa estado_Emprendedor directamente
-    res.status(200).json(emprendedores)
+
+    const decorados = emprendedores.map((e) => {
+      let estadoUI = 'Correcto'
+      if (e.status === false) {
+        estadoUI = 'Suspendido'
+      } else {
+        const est = e.estado_Emprendedor
+        if (['Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido'].includes(est)) {
+          estadoUI = est
+        } else {
+          estadoUI = 'Correcto' // Activo
+        }
+      }
+      // Devolver etiquetas conveniente para frontend
+      return { ...e, estado: estadoUI, estado_Emprendedor: e.estado_Emprendedor }
+    })
+
+    res.status(200).json(decorados)
   } catch (error) {
-    res.status(500).json({ msg: "Error al obtener los emprendedores" })
+    res.status(500).json({ msg: 'Error al obtener los emprendedores' })
   }
 }
 
@@ -225,19 +275,26 @@ const verEmprendedores = async (req, res) => {
 const actualizarEmprendedor = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(404).json({ msg: "ID no válido" })
+    return res.status(404).json({ msg: 'ID no válido' })
   }
 
   try {
     const emprendedor = await Emprendedor.findById(id)
-    if (!emprendedor) return res.status(404).json({ msg: "Emprendedor no encontrado" })
+    if (!emprendedor) return res.status(404).json({ msg: 'Emprendedor no encontrado' })
 
     const { nombre, apellido, email, password, telefono, estado, estado_Emprendedor, status } = req.body
 
-    if (nombre)   emprendedor.nombre   = nombre
+    if (nombre) {
+      const e1 = validarNombre(nombre); if (e1) return res.status(400).json({ msg: e1 })
+      emprendedor.nombre = nombre
+    }
+    if (telefono !== undefined) {
+      const e2 = validarCelular(telefono); if (e2) return res.status(400).json({ msg: e2 })
+      emprendedor.telefono = telefono
+    }
+
     if (apellido) emprendedor.apellido = apellido
     if (email)    emprendedor.email    = email
-    if (telefono) emprendedor.telefono = telefono
     if (password) emprendedor.password = await emprendedor.encrypPassword(password)
 
     // *** Nuevo: soporte de cambio de estado en este endpoint (fallback) ***
@@ -257,7 +314,7 @@ const actualizarEmprendedor = async (req, res) => {
     const actualizado = await emprendedor.save()
     res.status(200).json(actualizado)
   } catch (error) {
-    res.status(500).json({ msg: "Error al actualizar emprendedor" })
+    res.status(500).json({ msg: 'Error al actualizar emprendedor' })
   }
 }
 
@@ -265,11 +322,11 @@ const eliminarEmprendedor = async (req, res) => {
   const { id } = req.params
   try {
     const emprendedor = await Emprendedor.findById(id)
-    if (!emprendedor) return res.status(404).json({ msg: "Emprendedor no encontrado" })
+    if (!emprendedor) return res.status(404).json({ msg: 'Emprendedor no encontrado' })
     await emprendedor.deleteOne()
-    res.status(200).json({ msg: "Emprendedor eliminado correctamente" })
+    res.status(200).json({ msg: 'Emprendedor eliminado correctamente' })
   } catch (error) {
-    res.status(500).json({ msg: "Error al eliminar emprendedor" })
+    res.status(500).json({ msg: 'Error al eliminar emprendedor' })
   }
 }
 
@@ -358,7 +415,7 @@ const actualizarEstadoEmprendedorById = async (req, res) => {
     const emprendedor = await Emprendedor.findById(id)
     if (!emprendedor) return res.status(404).json({ msg: 'Emprendedor not encontrado' })
 
-    // Aplica regla de transición
+    // Aplica regla de transición segura del modelo
     emprendedor.aplicarEstadoEmprendedor(nuevoEstado)
     await emprendedor.save()
 
