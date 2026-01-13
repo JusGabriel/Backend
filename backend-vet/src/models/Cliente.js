@@ -28,7 +28,17 @@ const clienteSchema = new Schema({
     type: String,
     enum: ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido'],
     default: 'Activo'
-  }
+  },
+
+  /* ============================
+     📸 Foto de perfil (Cloudinary)
+     Igual que en Administrador/Emprendedor
+  ============================ */
+  // URL pública (secure_url de Cloudinary)
+  foto:         { type: String, default: null },
+  // public_id para borrar/reemplazar en Cloudinary
+  fotoPublicId: { type: String, default: null }
+
 }, { timestamps: true })
 
 /* ============================
@@ -69,7 +79,7 @@ clienteSchema.methods.aplicarEstadoUI = function (estadoUI) {
   } else {
     // Advertencia1/2/3
     this.estado_Emprendedor = estadoUI
-    // Si quieres asegurarte que advertencias sigan "activas", descomenta:
+    // Si quieres asegurarte que advertencias sigan "activas", podrías forzar:
     // this.status = true
   }
 }
