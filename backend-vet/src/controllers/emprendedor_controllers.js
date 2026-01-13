@@ -8,6 +8,7 @@ import {
 import { crearTokenJWT } from '../middleware/JWT.js'
 import Emprendimiento from '../models/Emprendimiento.js'
 import mongoose from 'mongoose'
+import cloudinary from '../config/cloudinary.js'
 
 /* ============================
    Validaciones internas
@@ -136,7 +137,7 @@ const login = async (req, res) => {
   const passwordValido = await emprendedorBDD.matchPassword(password)
   if (!passwordValido) return res.status(401).json({ msg: 'El password es incorrecto' })
 
-  // 🔎 Derivar estado UI igual que en cliente_controllers.js
+  // Derivar estado UI
   let estadoUI = 'Correcto'
   if (emprendedorBDD.status === false) {
     estadoUI = 'Suspendido'
@@ -149,7 +150,7 @@ const login = async (req, res) => {
     }
   }
 
-  // 🚫 Bloquear login si está suspendido (sin token)
+  // Bloquear login si está suspendido
   if (estadoUI === 'Suspendido') {
     return res.status(403).json({
       msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.',
@@ -159,7 +160,6 @@ const login = async (req, res) => {
     })
   }
 
-  // ✅ Login permitido: devolver token + estado (sin tocar crearTokenJWT)
   const { nombre, apellido, telefono, _id, rol } = emprendedorBDD
   const token = crearTokenJWT(_id, rol)
 
@@ -259,7 +259,6 @@ const verEmprendedores = async (req, res) => {
           estadoUI = 'Correcto' // Activo
         }
       }
-      // Devolver etiquetas conveniente para frontend
       return { ...e, estado: estadoUI, estado_Emprendedor: e.estado_Emprendedor }
     })
 
@@ -297,7 +296,6 @@ const actualizarEmprendedor = async (req, res) => {
     if (email)    emprendedor.email    = email
     if (password) emprendedor.password = await emprendedor.encrypPassword(password)
 
-    // *** Nuevo: soporte de cambio de estado en este endpoint (fallback) ***
     const nuevoEstado = estado_Emprendedor ?? estado
     if (nuevoEstado) {
       try {
@@ -389,43 +387,66 @@ export const obtenerFavoritos = async (req, res) => {
 }
 
 /* ============================
-   *** NUEVO *** Editar estado por ID (UI → Modelo)
-   Ruta: PUT /api/emprendedores/estado/:id
-   Body: { estado_Emprendedor: 'Activo|Advertencia1|Advertencia2|Advertencia3|Suspendido' }
-         ó { estado: '...' }
+   *** NUEVO *** Foto de perfil (solo archivo)
+   PUT /api/emprendedores/emprendedore/foto/:id
+   DELETE /api/emprendedores/emprendedore/foto/:id
 ============================ */
-const ESTADOS_EMPRE = ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
-
-const actualizarEstadoEmprendedorById = async (req, res) => {
+const actualizarFotoPerfil = async (req, res) => {
   const { id } = req.params
+
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(404).json({ msg: 'El ID no es válido' })
+    return res.status(404).json({ msg: 'ID no válido' })
   }
 
-  const { estado, estado_Emprendedor } = req.body
-  const nuevoEstado = estado_Emprendedor ?? estado
-  if (!nuevoEstado) {
-    return res.status(400).json({ msg: 'Debes enviar "estado_Emprendedor" o "estado"' })
-  }
-  if (!ESTADOS_EMPRE.includes(nuevoEstado)) {
-    return res.status(400).json({ msg: `Estado inválido. Permitidos: ${ESTADOS_EMPRE.join(', ')}` })
-  }
+  const emprendedorBDD = await Emprendedor.findById(id)
+  if (!emprendedorBDD) return res.status(404).json({ msg: 'Emprendedor no encontrado' })
 
   try {
-    const emprendedor = await Emprendedor.findById(id)
-    if (!emprendedor) return res.status(404).json({ msg: 'Emprendedor not encontrado' })
+    // Solo aceptamos archivo (Multer + CloudinaryStorage). NO URL.
+    if (!req.file?.path) {
+      return res.status(400).json({ msg: 'Debes enviar un archivo en el campo "foto"' })
+    }
 
-    // Aplica regla de transición segura del modelo
-    emprendedor.aplicarEstadoEmprendedor(nuevoEstado)
-    await emprendedor.save()
+    // Si había una foto previa, destruir en Cloudinary (best-effort)
+    if (emprendedorBDD.fotoPublicId) {
+      try { await cloudinary.uploader.destroy(emprendedorBDD.fotoPublicId) } catch {}
+    }
 
-    return res.status(200).json({
-      msg: 'Estado actualizado correctamente',
-      estado_Emprendedor: emprendedor.estado_Emprendedor,
-      status: emprendedor.status
-    })
+    emprendedorBDD.foto         = req.file.path;     // secure_url
+    emprendedorBDD.fotoPublicId = req.file.filename; // public_id
+
+    await emprendedorBDD.save()
+
+    return res.status(200).json({ msg: 'Foto actualizada', emprendedor: emprendedorBDD })
   } catch (error) {
-    return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
+    console.error('actualizarFotoPerfil (Emprendedor) error:', error)
+    res.status(500).json({ msg: 'Error al actualizar foto de perfil', error: error.message })
+  }
+}
+
+const eliminarFotoPerfil = async (req, res) => {
+  const { id } = req.params
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: 'ID no válido' })
+  }
+
+  const emprendedorBDD = await Emprendedor.findById(id)
+  if (!emprendedorBDD) return res.status(404).json({ msg: 'Emprendedor no encontrado' })
+
+  try {
+    if (emprendedorBDD.fotoPublicId) {
+      try { await cloudinary.uploader.destroy(emprendedorBDD.fotoPublicId) } catch {}
+    }
+
+    emprendedorBDD.foto = null
+    emprendedorBDD.fotoPublicId = null
+    await emprendedorBDD.save()
+
+    res.status(200).json({ msg: 'Foto eliminada', emprendedor: emprendedorBDD })
+  } catch (error) {
+    console.error('eliminarFotoPerfil (Emprendedor) error:', error)
+    res.status(500).json({ msg: 'Error al eliminar foto de perfil', error: error.message })
   }
 }
 
@@ -445,5 +466,6 @@ export {
   verEmprendedores,
   actualizarEmprendedor,
   eliminarEmprendedor,
-  actualizarEstadoEmprendedorById
+  actualizarFotoPerfil,     // 👈 nuevo
+  eliminarFotoPerfil        // 👈 nuevo
 }
