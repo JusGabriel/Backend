@@ -5,24 +5,13 @@ import Comentario from '../models/Comentario.js';
 import Producto from '../models/Productos.js';
 import Emprendimiento from '../models/Emprendimiento.js';
 
-/** Obtiene el actor actual desde req (set por verificarTokenJWT) */
 function getActorFromRequest(req) {
-  if (req.adminBDD) {
-    return { usuarioId: req.adminBDD._id, usuarioTipo: 'Administrador' };
-  }
-  if (req.emprendedorBDD) {
-    return { usuarioId: req.emprendedorBDD._id, usuarioTipo: 'Emprendedor' };
-  }
-  if (req.clienteBDD) {
-    return { usuarioId: req.clienteBDD._id, usuarioTipo: 'Cliente' };
-  }
+  if (req.adminBDD)       return { usuarioId: req.adminBDD._id,       usuarioTipo: 'Administrador' };
+  if (req.emprendedorBDD) return { usuarioId: req.emprendedorBDD._id, usuarioTipo: 'Emprendedor' };
+  if (req.clienteBDD)     return { usuarioId: req.clienteBDD._id,     usuarioTipo: 'Cliente' };
   return null;
 }
-
-/** Valida si un ObjectId es válido */
-function isValidObjectId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
-}
+function isValidObjectId(id) { return mongoose.Types.ObjectId.isValid(id); }
 
 /** Crea un comentario (Producto o Emprendimiento) */
 export async function crearComentario(req, res) {
@@ -31,7 +20,6 @@ export async function crearComentario(req, res) {
     if (!actor) return res.status(401).json({ msg: 'No autenticado' });
 
     const { destinoTipo, destinoId, texto } = req.body;
-
     if (!['Producto', 'Emprendimiento'].includes(destinoTipo)) {
       return res.status(400).json({ msg: 'destinoTipo debe ser "Producto" o "Emprendimiento"' });
     }
@@ -60,9 +48,9 @@ export async function crearComentario(req, res) {
       texto: textoClean
     });
 
-    // Devolver con populate del autor
+    // ✅ Popular autor con foto
     const populated = await Comentario.findById(comentario._id)
-      .populate('usuario', 'nombre apellido email rol')
+      .populate('usuario', 'nombre apellido email rol foto')
       .lean();
 
     return res.status(201).json(populated);
@@ -78,7 +66,6 @@ export async function listarComentariosProducto(req, res) {
     const { id } = req.params;
     if (!isValidObjectId(id)) return res.status(400).json({ msg: 'ID de producto inválido' });
 
-    // (Opcional) validar existencia
     const prod = await Producto.findById(id).select('_id').lean();
     if (!prod) return res.status(404).json({ msg: 'Producto no encontrado' });
 
@@ -87,7 +74,7 @@ export async function listarComentariosProducto(req, res) {
       destinoTipo: 'Producto'
     })
       .sort({ createdAt: -1 })
-      .populate('usuario', 'nombre apellido email rol')
+      .populate('usuario', 'nombre apellido email rol foto') // 👈 incluye foto
       .lean();
 
     return res.status(200).json(comentarios);
@@ -111,7 +98,7 @@ export async function listarComentariosEmprendimiento(req, res) {
       destinoTipo: 'Emprendimiento'
     })
       .sort({ createdAt: -1 })
-      .populate('usuario', 'nombre apellido email rol')
+      .populate('usuario', 'nombre apellido email rol foto') // 👈 incluye foto
       .lean();
 
     return res.status(200).json(comentarios);
