@@ -8,6 +8,7 @@ import {
   sendMailToRecoveryPasswordCliente,
 } from '../config/nodemailerCliente.js'
 import { crearTokenJWT } from '../middleware/JWT.js'
+import cloudinary from '../config/cloudinary.js'
 
 /* ============================
    Validaciones internas
@@ -19,8 +20,6 @@ function validarNombre(nombre) {
   return null
 }
 
-// Si tu teléfono es opcional, NO lo marques como obligatorio:
-// Ajusté la validación para que solo valide formato si viene con valor.
 function validarTelefono(telefono) {
   if (telefono == null || telefono === '') return null
   if (typeof telefono !== 'string' && typeof telefono !== 'number') {
@@ -108,7 +107,6 @@ const crearNuevoPassword = async (req, res) => {
   res.status(200).json({ msg: 'Ya puedes iniciar sesión con tu nuevo password' })
 }
 
-
 /* ============================
    Login
 ============================ */
@@ -125,7 +123,7 @@ const login = async (req, res) => {
   const ok = await clienteBDD.matchPassword(password)
   if (!ok) return res.status(401).json({ msg: 'El password no es el correcto' })
 
-  // 🔎 Derivar estado UI (Correcto / Advertencia1-3 / Suspendido) con la misma lógica que usas en verClientes
+  // Derivar estado UI
   let estadoUI = 'Correcto'
   if (clienteBDD.status === false) {
     estadoUI = 'Suspendido'
@@ -138,7 +136,7 @@ const login = async (req, res) => {
     }
   }
 
-  // 🚫 Bloquear login si está suspendido (sin token)
+  // Bloquear login si está suspendido
   if (estadoUI === 'Suspendido') {
     return res.status(403).json({
       msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.',
@@ -148,7 +146,6 @@ const login = async (req, res) => {
     })
   }
 
-  // ✅ Login permitido: devolver token + estado (sin tocar crearTokenJWT)
   const { nombre, apellido, direccion, telefono, _id, rol } = clienteBDD
   const token = crearTokenJWT(clienteBDD._id, clienteBDD.rol)
 
@@ -161,13 +158,11 @@ const login = async (req, res) => {
     telefono,
     _id,
     email: clienteBDD.email,
-    // 👉 incluir estado para que el frontend lo persista y muestre avisos
     estadoUI,
     estado_Emprendedor: clienteBDD.estado_Emprendedor,
     status: clienteBDD.status
   })
 }
-
 
 /* ============================
    Listado (decorado para UI)
@@ -177,10 +172,6 @@ const verClientes = async (req, res) => {
     const clientes = await Cliente.find().lean()
 
     const decorados = clientes.map((c) => {
-      // Derivar etiqueta de UI desde modelo:
-      // - status=false       => 'Suspendido'
-      // - estado_Emprendedor 'Activo' => 'Correcto'
-      // - Advertencia/Suspendido      => igual
       let estadoUI = 'Correcto'
       if (c.status === false) {
         estadoUI = 'Suspendido'
@@ -226,7 +217,7 @@ const actualizarCliente = async (req, res) => {
     if (email)    cliente.email    = email
     if (password) cliente.password = await cliente.encrypPassword(password)
 
-    // *** Nuevo: permitir cambiar estado también por este endpoint (fallback UI) ***
+    // Cambiar estado desde UI (fallback)
     const estadoUI = estado ?? estado_Cliente
     if (estadoUI) {
       try {
@@ -236,7 +227,7 @@ const actualizarCliente = async (req, res) => {
       }
     }
 
-    // Si mandan directamente modelo (no recomendado, pero por compatibilidad):
+    // Modelo directo (compatibilidad)
     if (estado_Emprendedor) {
       const vals = ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido']
       if (!vals.includes(estado_Emprendedor)) {
@@ -330,10 +321,71 @@ const actualizarPerfil = async (req, res) => {
 }
 
 /* ============================
-   *** NUEVO *** Editar estado por ID (UI → Modelo)
-   Ruta: PUT /api/clientes/estado/:id
-   Body: { estado: 'Correcto|Advertencia1|Advertencia2|Advertencia3|Suspendido' }
-         ó { estado_Cliente: '...' }
+   *** NUEVO *** Foto de perfil (solo archivo)
+   PUT /api/clientes/cliente/foto/:id
+   DELETE /api/clientes/cliente/foto/:id
+============================ */
+const actualizarFotoPerfil = async (req, res) => {
+  const { id } = req.params
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: 'ID no válido' })
+  }
+
+  const clienteBDD = await Cliente.findById(id)
+  if (!clienteBDD) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
+  try {
+    // Solo aceptamos archivo (Multer + CloudinaryStorage). NO URL.
+    if (!req.file?.path) {
+      return res.status(400).json({ msg: 'Debes enviar un archivo en el campo "foto"' })
+    }
+
+    // Si había una foto previa, destruir en Cloudinary (best-effort)
+    if (clienteBDD.fotoPublicId) {
+      try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {}
+    }
+
+    clienteBDD.foto         = req.file.path;     // secure_url
+    clienteBDD.fotoPublicId = req.file.filename; // public_id
+
+    await clienteBDD.save()
+
+    return res.status(200).json({ msg: 'Foto actualizada', cliente: clienteBDD })
+  } catch (error) {
+    console.error('actualizarFotoPerfil (Cliente) error:', error)
+    res.status(500).json({ msg: 'Error al actualizar foto de perfil', error: error.message })
+  }
+}
+
+const eliminarFotoPerfil = async (req, res) => {
+  const { id } = req.params
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: 'ID no válido' })
+  }
+
+  const clienteBDD = await Cliente.findById(id)
+  if (!clienteBDD) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
+  try {
+    if (clienteBDD.fotoPublicId) {
+      try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {}
+    }
+
+    clienteBDD.foto = null
+    clienteBDD.fotoPublicId = null
+    await clienteBDD.save()
+
+    res.status(200).json({ msg: 'Foto eliminada', cliente: clienteBDD })
+  } catch (error) {
+    console.error('eliminarFotoPerfil (Cliente) error:', error)
+    res.status(500).json({ msg: 'Error al eliminar foto de perfil', error: error.message })
+  }
+}
+
+/* ============================
+   Editar estado por ID (UI → Modelo)
 ============================ */
 const ESTADOS_UI = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
 const actualizarEstadoClienteById = async (req, res) => {
@@ -355,11 +407,9 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    // Mapeo UI → modelo usando método seguro
     cliente.aplicarEstadoUI(nuevoEstadoUI)
     await cliente.save()
 
-    // Devuelve ambos por conveniencia
     return res.status(200).json({
       msg: 'Estado actualizado correctamente',
       estadoUI: nuevoEstadoUI,
@@ -387,6 +437,7 @@ export {
   perfil,
   actualizarPassword,
   actualizarPerfil,
-  actualizarEstadoClienteById
+  actualizarEstadoClienteById,
+  actualizarFotoPerfil,   // 👈 nuevo
+  eliminarFotoPerfil      // 👈 nuevo
 }
-
