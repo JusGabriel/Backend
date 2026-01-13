@@ -243,7 +243,7 @@ const actualizarAdministrador = async (req, res) => {
 
     if (password) admin.password = await admin.encrypPassword(password);
     if (typeof status === 'boolean') admin.status = status;
-    if (rol) admin.rol = rol; // solo si tu modelo/negocio lo permite
+    if (rol) admin.rol = rol;
 
     const actualizado = await admin.save();
     res.status(200).json(actualizado);
@@ -265,7 +265,7 @@ const eliminarAdministrador = async (req, res) => {
 };
 
 /* ============================
-   Foto de perfil (Cloudinary)
+   Foto de perfil (Cloudinary) – igual que Emprendimientos
 ============================ */
 const actualizarFotoPerfil = async (req, res) => {
   const { id } = req.params;
@@ -292,7 +292,7 @@ const actualizarFotoPerfil = async (req, res) => {
       return res.status(200).json({ msg: 'Foto actualizada', admin: adminBDD });
     }
 
-    // Si viene URL (fallback)
+    // Si viene URL (igual patrón que Emprendimientos)
     if (typeof req.body.foto === 'string' && req.body.foto.trim()) {
       if (adminBDD.fotoPublicId) {
         try { await cloudinary.uploader.destroy(adminBDD.fotoPublicId); } catch {}
