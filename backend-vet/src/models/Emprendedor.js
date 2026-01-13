@@ -36,7 +36,17 @@ const emprendedorSchema = new Schema({
     type: String,
     enum: ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido'],
     default: 'Activo'
-  }
+  },
+
+  /* ============================
+     📸 Foto de perfil (Cloudinary)
+     Igual que en Administrador/Emprendimientos
+  ============================ */
+  // URL pública (secure_url de Cloudinary)
+  foto:         { type: String, default: null },
+  // public_id para borrar/reemplazar en Cloudinary
+  fotoPublicId: { type: String, default: null }
+
 }, { timestamps: true })
 
 /* ============================
@@ -86,9 +96,6 @@ emprendedorSchema.methods.aplicarEstadoEmprendedor = function (nuevoEstado) {
     this.status = false
   } else if (nuevoEstado === 'Activo') {
     this.status = true
-  } else {
-    // Advertencias: puedes decidir mantener status como esté o forzarlo a true
-    // this.status = true
   }
 }
 
