@@ -28,6 +28,20 @@ import cloudinary from '../config/cloudinary.js'
 
 const router = Router()
 
+// ✅ Middleware de rol inline (simple)
+const requireRole = (...roles) => (req, res, next) => {
+  const rol =
+    req.adminBDD?.rol ||
+    req.emprendedorBDD?.rol ||
+    req.clienteBDD?.rol ||
+    null
+
+  if (!rol || !roles.includes(rol)) {
+    return res.status(403).json({ msg: 'No autorizado' })
+  }
+  next()
+}
+
 // Storage para fotos de clientes.
 const clienteFotoStorage = new CloudinaryStorage({
   cloudinary,
@@ -77,9 +91,21 @@ router.delete(
 )
 
 // *** Editar estado del cliente por ID (con auditoría embebida) ***
-router.put("/estado/:id", /* agrega tu middleware de rol si aplica */ verificarTokenJWT, actualizarEstadoClienteById)
+// Solo Administrador puede cambiar estado
+router.put(
+  "/estado/:id",
+  verificarTokenJWT,
+  requireRole('Administrador'),
+  actualizarEstadoClienteById
+)
 
 // *** Consultar histórico de auditoría embebida ***
-router.get("/estado/:id/auditoria", verificarTokenJWT, listarAuditoriaCliente)
+// Solo Administrador
+router.get(
+  "/estado/:id/auditoria",
+  verificarTokenJWT,
+  requireRole('Administrador'),
+  listarAuditoriaCliente
+)
 
 export default router
