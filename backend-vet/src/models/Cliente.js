@@ -5,9 +5,8 @@ import bcrypt from 'bcryptjs'
 
 /**
  * Evento de advertencia/suspensión embebido (inmutable).
- * - creadoPor: lo ideal es el _id del usuario administrador que ejecuta la acción.
- *   Si aún no tienes un "Usuario" unificado, puedes guardar el _id del admin (si lo tienes)
- *   o dejarlo null temporalmente. Por eso no lo marcamos como required.
+ * - creadoPor: _id del Administrador que ejecuta la acción.
+ *   IMPORTANTE: el ref debe coincidir con el modelo real => 'Administrador'
  */
 const AdvertenciaSchema = new Schema({
   tipo: {
@@ -16,7 +15,8 @@ const AdvertenciaSchema = new Schema({
     required: true
   },
   motivo:     { type: String, required: true, trim: true },
-  creadoPor:  { type: Schema.Types.ObjectId, ref: 'Usuario', default: null }, // admin que ejecuta
+  // 👇 Ajuste clave: el ref coincide con tu modelo de admin
+  creadoPor:  { type: Schema.Types.ObjectId, ref: 'Administrador', default: null },
   origen:     { type: String, enum: ['manual', 'sistema', 'automatizado'], default: 'manual' },
   fecha:      { type: Date, default: Date.now },
   ip:         { type: String, default: null },
