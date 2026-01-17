@@ -5,8 +5,8 @@ import bcrypt from 'bcryptjs'
 
 /**
  * Evento de advertencia/suspensión embebido (inmutable).
- * - creadoPor: _id del Administrador que ejecuta la acción.
- *   IMPORTANTE: el ref debe coincidir con el modelo real => 'Administrador'
+ * - creadoPor: _id del Administrador que ejecuta la acción (ref ajustado a 'Administrador')
+ * - creadoPorNombre/Email: snapshot para evitar depender de populate y preservar histórico
  */
 const AdvertenciaSchema = new Schema({
   tipo: {
@@ -15,8 +15,11 @@ const AdvertenciaSchema = new Schema({
     required: true
   },
   motivo:     { type: String, required: true, trim: true },
-  // 👇 Ajuste clave: el ref coincide con tu modelo de admin
   creadoPor:  { type: Schema.Types.ObjectId, ref: 'Administrador', default: null },
+  // snapshots del actor en el momento del evento
+  creadoPorNombre: { type: String, default: null },
+  creadoPorEmail:  { type: String, default: null },
+
   origen:     { type: String, enum: ['manual', 'sistema', 'automatizado'], default: 'manual' },
   fecha:      { type: Date, default: Date.now },
   ip:         { type: String, default: null },
@@ -86,13 +89,23 @@ clienteSchema.methods.crearToken = function () {
  * Método interno: registra un evento de cambio de estado + denormaliza estado actual.
  */
 clienteSchema.methods._registrarEventoEstado = function ({
-  nuevoEstado, motivo, adminId = null, origen = 'manual', ip = null, userAgent = null, metadata = null
+  nuevoEstado,
+  motivo,
+  adminId = null,
+  adminNombre = null,  // 👈 snapshot
+  adminEmail  = null,  // 👈 snapshot
+  origen = 'manual',
+  ip = null,
+  userAgent = null,
+  metadata = null
 }) {
   // Evento inmutable
   this.advertencias.push({
     tipo: nuevoEstado === 'Activo' ? 'Correccion' : nuevoEstado,
     motivo,
     creadoPor: adminId || null,
+    creadoPorNombre: adminNombre || null,
+    creadoPorEmail: adminEmail || null,
     origen,
     ip,
     userAgent,
@@ -113,7 +126,16 @@ clienteSchema.methods._registrarEventoEstado = function ({
  * Cambiar estado explícito recibido desde la UI/Admin.
  * estadoUI: 'Correcto' | 'Advertencia1' | 'Advertencia2' | 'Advertencia3' | 'Suspendido'
  */
-clienteSchema.methods.cambiarEstado = function ({ estadoUI, motivo, adminId, ip, userAgent, metadata }) {
+clienteSchema.methods.cambiarEstado = function ({
+  estadoUI,
+  motivo,
+  adminId,
+  adminNombre,  // 👈
+  adminEmail,   // 👈
+  ip,
+  userAgent,
+  metadata
+}) {
   const PERMITIDOS = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
   if (!PERMITIDOS.includes(estadoUI)) {
     throw new Error(`Estado UI inválido: ${estadoUI}`)
@@ -122,21 +144,47 @@ clienteSchema.methods.cambiarEstado = function ({ estadoUI, motivo, adminId, ip,
   if (!motivo || !String(motivo).trim()) {
     throw new Error('El motivo es obligatorio')
   }
-  this._registrarEventoEstado({ nuevoEstado: target, motivo, adminId, ip, userAgent, metadata })
+  this._registrarEventoEstado({
+    nuevoEstado: target,
+    motivo,
+    adminId,
+    adminNombre,
+    adminEmail,
+    ip,
+    userAgent,
+    metadata
+  })
   return target
 }
 
 /**
  * Escalado automático de Advertencia1 -> 2 -> 3 -> Suspendido
  */
-clienteSchema.methods.aplicarAdvertencia = function ({ motivo, adminId, ip, userAgent, metadata }) {
+clienteSchema.methods.aplicarAdvertencia = function ({
+  motivo,
+  adminId,
+  adminNombre,  // 👈
+  adminEmail,   // 👈
+  ip,
+  userAgent,
+  metadata
+}) {
   const count = this.advertencias.filter(a => a.tipo && a.tipo.startsWith('Advertencia')).length
   const siguiente = Math.min(count + 1, 3)
   const nuevoEstado = (siguiente >= 3) ? 'Suspendido' : `Advertencia${siguiente}`
   if (!motivo || !String(motivo).trim()) {
     throw new Error('El motivo es obligatorio')
   }
-  this._registrarEventoEstado({ nuevoEstado, motivo, adminId, ip, userAgent, metadata })
+  this._registrarEventoEstado({
+    nuevoEstado,
+    motivo,
+    adminId,
+    adminNombre,
+    adminEmail,
+    ip,
+    userAgent,
+    metadata
+  })
   return nuevoEstado
 }
 
@@ -167,6 +215,8 @@ clienteSchema.pre('save', function (next) {
       nuevoEstado: 'Activo',
       motivo: 'Fin de suspensión automática',
       adminId: null,
+      adminNombre: null,
+      adminEmail: null,
       origen: 'sistema'
     })
     this.suspendidoHasta = null
