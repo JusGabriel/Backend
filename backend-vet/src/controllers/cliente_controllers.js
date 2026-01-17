@@ -1,7 +1,7 @@
 
 // controllers/cliente_controllers.js
 import Cliente from '../models/Cliente.js'
-import Emprendimiento from '../models/Emprendimiento.js'
+import Emprendimiento from '../models/Emprendimiento.js' // si lo usas en otros métodos
 import mongoose from 'mongoose'
 import {
   sendMailToRegisterCliente,
@@ -146,6 +146,11 @@ const login = async (req, res) => {
     })
   }
 
+  // Última advertencia (para banners)
+  const ultima = (clienteBDD.advertencias?.length || 0) > 0
+    ? clienteBDD.advertencias[clienteBDD.advertencias.length - 1]
+    : null
+
   const { nombre, apellido, direccion, telefono, _id, rol } = clienteBDD
   const token = crearTokenJWT(clienteBDD._id, clienteBDD.rol)
 
@@ -160,7 +165,12 @@ const login = async (req, res) => {
     email: clienteBDD.email,
     estadoUI,
     estado_Emprendedor: clienteBDD.estado_Emprendedor,
-    status: clienteBDD.status
+    status: clienteBDD.status,
+    ultimaAdvertencia: ultima ? {
+      tipo: ultima.tipo,
+      motivo: ultima.motivo,
+      fecha: ultima.fecha
+    } : null
   })
 }
 
@@ -180,10 +190,24 @@ const verClientes = async (req, res) => {
         if (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)) {
           estadoUI = e
         } else {
-          estadoUI = 'Correcto' // Activo
+          estadoUI = 'Correcto'
         }
       }
-      return { ...c, estado: estadoUI, estado_Cliente: estadoUI }
+
+      const ultima = (c.advertencias?.length || 0) > 0
+        ? c.advertencias[c.advertencias.length - 1]
+        : null
+
+      return {
+        ...c,
+        estado: estadoUI,
+        estado_Cliente: estadoUI,
+        ultimaAdvertencia: ultima ? {
+          tipo: ultima.tipo,
+          motivo: ultima.motivo,
+          fecha: ultima.fecha
+        } : null
+      }
     })
 
     res.status(200).json(decorados)
@@ -217,25 +241,43 @@ const actualizarCliente = async (req, res) => {
     if (email)    cliente.email    = email
     if (password) cliente.password = await cliente.encrypPassword(password)
 
-    // Cambiar estado desde UI (fallback)
+    // Cambiar estado desde UI (fallback) — si viene, exige motivo mínimamente
     const estadoUI = estado ?? estado_Cliente
     if (estadoUI) {
+      const motivo = req.body.motivo || 'Cambio desde actualizarCliente'
       try {
-        cliente.aplicarEstadoUI(estadoUI)
+        cliente.cambiarEstado({
+          estadoUI,
+          motivo,
+          adminId: req.usuario?._id || req.clienteBDD?._id || null,
+          ip: req.ip,
+          userAgent: req.headers['user-agent']
+        })
       } catch (e) {
         return res.status(400).json({ msg: e.message })
       }
     }
 
-    // Modelo directo (compatibilidad)
+    // Modelo directo (compatibilidad). Si te llega este campo, regístralo con auditoría mínima.
     if (estado_Emprendedor) {
       const vals = ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido']
       if (!vals.includes(estado_Emprendedor)) {
         return res.status(400).json({ msg: `estado_Emprendedor inválido. Permitidos: ${vals.join(', ')}` })
       }
-      cliente.estado_Emprendedor = estado_Emprendedor
+      // Normalizamos a estado UI equivalente
+      const estadoUICompat = (estado_Emprendedor === 'Activo') ? 'Correcto' : estado_Emprendedor
+      const motivoCompat = req.body.motivo || 'Cambio directo de estado_Emprendedor'
+      cliente.cambiarEstado({
+        estadoUI: estadoUICompat,
+        motivo: motivoCompat,
+        adminId: req.usuario?._id || req.clienteBDD?._id || null,
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      })
     }
+
     if (typeof status === 'boolean') {
+      // Guardamos coherencia, pero NO sobreescribimos la regla de negocio si el estado es Suspendido/Activo
       cliente.status = status
     }
 
@@ -321,9 +363,7 @@ const actualizarPerfil = async (req, res) => {
 }
 
 /* ============================
-   *** NUEVO *** Foto de perfil (solo archivo)
-   PUT /api/clientes/cliente/foto/:id
-   DELETE /api/clientes/cliente/foto/:id
+   Foto de perfil (solo archivo)
 ============================ */
 const actualizarFotoPerfil = async (req, res) => {
   const { id } = req.params
@@ -336,18 +376,16 @@ const actualizarFotoPerfil = async (req, res) => {
   if (!clienteBDD) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
   try {
-    // Solo aceptamos archivo (Multer + CloudinaryStorage). NO URL.
     if (!req.file?.path) {
       return res.status(400).json({ msg: 'Debes enviar un archivo en el campo "foto"' })
     }
 
-    // Si había una foto previa, destruir en Cloudinary (best-effort)
     if (clienteBDD.fotoPublicId) {
       try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {}
     }
 
-    clienteBDD.foto         = req.file.path;     // secure_url
-    clienteBDD.fotoPublicId = req.file.filename; // public_id
+    clienteBDD.foto         = req.file.path     // secure_url
+    clienteBDD.fotoPublicId = req.file.filename // public_id
 
     await clienteBDD.save()
 
@@ -385,16 +423,17 @@ const eliminarFotoPerfil = async (req, res) => {
 }
 
 /* ============================
-   Editar estado por ID (UI → Modelo)
+   Estado por ID (UI → Modelo) + auditoría embebida
 ============================ */
 const ESTADOS_UI = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
+
 const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(404).json({ msg: 'El ID no es válido' })
   }
 
-  const { estado, estado_Cliente } = req.body
+  const { estado, estado_Cliente, motivo, suspendidoHasta, metadata } = req.body
   const nuevoEstadoUI = estado ?? estado_Cliente
   if (!nuevoEstadoUI) {
     return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
@@ -402,23 +441,73 @@ const actualizarEstadoClienteById = async (req, res) => {
   if (!ESTADOS_UI.includes(nuevoEstadoUI)) {
     return res.status(400).json({ msg: `Estado inválido. Permitidos: ${ESTADOS_UI.join(', ')}` })
   }
+  if (!motivo || !String(motivo).trim()) {
+    return res.status(400).json({ msg: 'Debes enviar "motivo"' })
+  }
 
   try {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    cliente.aplicarEstadoUI(nuevoEstadoUI)
+    // Admin que ejecuta (ajusta según tu middleware de auth)
+    const adminId = req.usuario?._id || req.clienteBDD?._id || null
+
+    // Aplica cambio + guarda evento embebido
+    cliente.cambiarEstado({
+      estadoUI: nuevoEstadoUI,
+      motivo,
+      adminId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      metadata: metadata ?? null
+    })
+
+    // Suspensión temporal opcional
+    if (nuevoEstadoUI === 'Suspendido' && suspendidoHasta) {
+      cliente.suspendidoHasta = new Date(suspendidoHasta)
+    }
+
     await cliente.save()
 
     return res.status(200).json({
       msg: 'Estado actualizado correctamente',
       estadoUI: nuevoEstadoUI,
       estado_Emprendedor: cliente.estado_Emprendedor,
-      status: cliente.status
+      status: cliente.status,
+      ultimaAdvertenciaAt: cliente.ultimaAdvertenciaAt
     })
   } catch (error) {
     return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
   }
+}
+
+/* ============================
+   Listar auditoría embebida (paginado simple)
+============================ */
+const listarAuditoriaCliente = async (req, res) => {
+  const { id } = req.params
+  const page = Math.max(1, parseInt(req.query.page ?? '1', 10))
+  const limit = Math.max(1, Math.min(100, parseInt(req.query.limit ?? '20', 10)))
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: 'El ID no es válido' })
+  }
+
+  const cliente = await Cliente.findById(id).select('advertencias').lean()
+  if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
+  const total = cliente.advertencias.length
+  // Orden inverso (más recientes primero) sin mutar el array original
+  const ordered = [...cliente.advertencias].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+  const start = (page - 1) * limit
+  const items = ordered.slice(start, start + limit)
+
+  res.status(200).json({
+    total,
+    page,
+    limit,
+    items
+  })
 }
 
 /* ============================
@@ -438,6 +527,7 @@ export {
   actualizarPassword,
   actualizarPerfil,
   actualizarEstadoClienteById,
-  actualizarFotoPerfil,   // 👈 nuevo
-  eliminarFotoPerfil      // 👈 nuevo
+  actualizarFotoPerfil,
+  eliminarFotoPerfil,
+  listarAuditoriaCliente
 }
