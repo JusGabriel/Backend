@@ -15,8 +15,9 @@ import {
   actualizarPassword,
   actualizarPerfil,
   actualizarEstadoClienteById,
-  actualizarFotoPerfil,   // 👈 nuevo
-  eliminarFotoPerfil      // 👈 nuevo
+  actualizarFotoPerfil,
+  eliminarFotoPerfil,
+  listarAuditoriaCliente
 } from "../controllers/cliente_controllers.js"
 import { verificarTokenJWT } from '../middleware/JWT.js'
 
@@ -28,14 +29,12 @@ import cloudinary from '../config/cloudinary.js'
 const router = Router()
 
 // Storage para fotos de clientes.
-// Genera req.file.path (secure_url) y req.file.filename (public_id), como en Admin/Emprendedor.
 const clienteFotoStorage = new CloudinaryStorage({
   cloudinary,
   params: (req, file) => ({
-    folder: 'usuarios/clientes',                   // carpeta en Cloudinary
+    folder: 'usuarios/clientes',
     resource_type: 'image',
     public_id: `cli_${req.params?.id || 'anon'}_${Date.now()}`
-    // Sin transformaciones extra para replicar patrón base.
   }),
 })
 
@@ -67,7 +66,7 @@ router.put("/cliente/actualizarpassword/:id", verificarTokenJWT, actualizarPassw
 router.put(
   "/cliente/foto/:id",
   verificarTokenJWT,
-  uploadClienteFoto.single('foto'),   // campo FormData: "foto"
+  uploadClienteFoto.single('foto'),
   actualizarFotoPerfil
 )
 
@@ -77,7 +76,10 @@ router.delete(
   eliminarFotoPerfil
 )
 
-// *** Editar estado del cliente por ID (ruta que usa tu front) ***
-router.put("/estado/:id", /* verificarTokenJWT, */ actualizarEstadoClienteById)
+// *** Editar estado del cliente por ID (con auditoría embebida) ***
+router.put("/estado/:id", /* agrega tu middleware de rol si aplica */ verificarTokenJWT, actualizarEstadoClienteById)
+
+// *** Consultar histórico de auditoría embebida ***
+router.get("/estado/:id/auditoria", verificarTokenJWT, listarAuditoriaCliente)
 
 export default router
