@@ -169,7 +169,10 @@ const login = async (req, res) => {
     ultimaAdvertencia: ultima ? {
       tipo: ultima.tipo,
       motivo: ultima.motivo,
-      fecha: ultima.fecha
+      fecha: ultima.fecha,
+      // opcional: podrías incluir estos snapshots aquí si los quieres en login
+      // creadoPorNombre: ultima.creadoPorNombre || null,
+      // creadoPorEmail:  ultima.creadoPorEmail  || null
     } : null
   })
 }
@@ -241,6 +244,11 @@ const actualizarCliente = async (req, res) => {
     if (email)    cliente.email    = email
     if (password) cliente.password = await cliente.encrypPassword(password)
 
+    // Datos del admin ejecutor (middleware)
+    const adminId     = req.adminBDD?._id || null
+    const adminNombre = req.adminBDD ? `${req.adminBDD.nombre} ${req.adminBDD.apellido || ''}`.trim() : null
+    const adminEmail  = req.adminBDD?.email || null
+
     // Cambiar estado desde UI (fallback) — si viene, exige motivo mínimamente
     const estadoUI = estado ?? estado_Cliente
     if (estadoUI) {
@@ -249,8 +257,9 @@ const actualizarCliente = async (req, res) => {
         cliente.cambiarEstado({
           estadoUI,
           motivo,
-          // 👇 Usamos el actor real de tu middleware
-          adminId: req.adminBDD?._id || null,
+          adminId,
+          adminNombre,
+          adminEmail,
           ip: req.ip,
           userAgent: req.headers['user-agent']
         })
@@ -271,7 +280,9 @@ const actualizarCliente = async (req, res) => {
       cliente.cambiarEstado({
         estadoUI: estadoUICompat,
         motivo: motivoCompat,
-        adminId: req.adminBDD?._id || null,
+        adminId,
+        adminNombre,
+        adminEmail,
         ip: req.ip,
         userAgent: req.headers['user-agent']
       })
@@ -451,13 +462,17 @@ const actualizarEstadoClienteById = async (req, res) => {
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
     // Admin que ejecuta (de tu middleware)
-    const adminId = req.adminBDD?._id || null
+    const adminId     = req.adminBDD?._id || null
+    const adminNombre = req.adminBDD ? `${req.adminBDD.nombre} ${req.adminBDD.apellido || ''}`.trim() : null
+    const adminEmail  = req.adminBDD?.email || null
 
-    // Aplica cambio + guarda evento embebido
+    // Aplica cambio + guarda evento embebido (con snapshots)
     cliente.cambiarEstado({
       estadoUI: nuevoEstadoUI,
       motivo,
       adminId,
+      adminNombre,
+      adminEmail,
       ip: req.ip,
       userAgent: req.headers['user-agent'],
       metadata: metadata ?? null
@@ -498,17 +513,27 @@ const listarAuditoriaCliente = async (req, res) => {
     .select('advertencias')
     .populate({
       path: 'advertencias.creadoPor',
-      select: 'nombre apellido email rol' // del modelo Administrador
+      select: 'nombre apellido email rol'
     })
     .lean()
-
   if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
   const total = cliente.advertencias.length
-  // Orden inverso (más recientes primero) sin mutar el array original
+
+  // Orden inverso (más recientes primero)
   const ordered = [...cliente.advertencias].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
   const start = (page - 1) * limit
-  const items = ordered.slice(start, start + limit)
+  let items = ordered.slice(start, start + limit)
+
+  // Fallback: si algún evento antiguo no tiene snapshot, rellena desde populate (si existe)
+  items = items.map((a) => {
+    const fullName = a.creadoPor ? `${a.creadoPor.nombre || ''} ${a.creadoPor.apellido || ''}`.trim() : null
+    return {
+      ...a,
+      creadoPorNombre: a.creadoPorNombre ?? (fullName || null),
+      creadoPorEmail:  a.creadoPorEmail  ?? (a.creadoPor?.email || null)
+    }
+  })
 
   res.status(200).json({
     total,
