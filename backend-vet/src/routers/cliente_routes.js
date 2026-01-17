@@ -28,7 +28,7 @@ import cloudinary from '../config/cloudinary.js'
 
 const router = Router()
 
-// ✅ Middleware de rol inline (simple)
+// Middleware simple de rol
 const requireRole = (...roles) => (req, res, next) => {
   const rol =
     req.adminBDD?.rol ||
@@ -42,7 +42,7 @@ const requireRole = (...roles) => (req, res, next) => {
   next()
 }
 
-// Storage para fotos de clientes.
+// Storage para fotos de clientes
 const clienteFotoStorage = new CloudinaryStorage({
   cloudinary,
   params: (req, file) => ({
@@ -91,7 +91,7 @@ router.delete(
 )
 
 // *** Editar estado del cliente por ID (con auditoría embebida) ***
-// Solo Administrador puede cambiar estado
+// Solo Administrador
 router.put(
   "/estado/:id",
   verificarTokenJWT,
