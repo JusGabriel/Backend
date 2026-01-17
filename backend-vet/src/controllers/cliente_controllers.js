@@ -249,7 +249,8 @@ const actualizarCliente = async (req, res) => {
         cliente.cambiarEstado({
           estadoUI,
           motivo,
-          adminId: req.usuario?._id || req.clienteBDD?._id || null,
+          // 👇 Usamos el actor real de tu middleware
+          adminId: req.adminBDD?._id || null,
           ip: req.ip,
           userAgent: req.headers['user-agent']
         })
@@ -270,7 +271,7 @@ const actualizarCliente = async (req, res) => {
       cliente.cambiarEstado({
         estadoUI: estadoUICompat,
         motivo: motivoCompat,
-        adminId: req.usuario?._id || req.clienteBDD?._id || null,
+        adminId: req.adminBDD?._id || null,
         ip: req.ip,
         userAgent: req.headers['user-agent']
       })
@@ -449,8 +450,8 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    // Admin que ejecuta (ajusta según tu middleware de auth)
-    const adminId = req.usuario?._id || req.clienteBDD?._id || null
+    // Admin que ejecuta (de tu middleware)
+    const adminId = req.adminBDD?._id || null
 
     // Aplica cambio + guarda evento embebido
     cliente.cambiarEstado({
@@ -493,7 +494,14 @@ const listarAuditoriaCliente = async (req, res) => {
     return res.status(404).json({ msg: 'El ID no es válido' })
   }
 
-  const cliente = await Cliente.findById(id).select('advertencias').lean()
+  const cliente = await Cliente.findById(id)
+    .select('advertencias')
+    .populate({
+      path: 'advertencias.creadoPor',
+      select: 'nombre apellido email rol' // del modelo Administrador
+    })
+    .lean()
+
   if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
   const total = cliente.advertencias.length
