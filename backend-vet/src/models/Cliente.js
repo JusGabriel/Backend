@@ -3,6 +3,27 @@
 import { Schema, model } from 'mongoose'
 import bcrypt from 'bcryptjs'
 
+/**
+ * Evento de advertencia/suspensión embebido (inmutable).
+ * - creadoPor: lo ideal es el _id del usuario administrador que ejecuta la acción.
+ *   Si aún no tienes un "Usuario" unificado, puedes guardar el _id del admin (si lo tienes)
+ *   o dejarlo null temporalmente. Por eso no lo marcamos como required.
+ */
+const AdvertenciaSchema = new Schema({
+  tipo: {
+    type: String,
+    enum: ['Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido', 'Reactivado', 'Correccion'],
+    required: true
+  },
+  motivo:     { type: String, required: true, trim: true },
+  creadoPor:  { type: Schema.Types.ObjectId, ref: 'Usuario', default: null }, // admin que ejecuta
+  origen:     { type: String, enum: ['manual', 'sistema', 'automatizado'], default: 'manual' },
+  fecha:      { type: Date, default: Date.now },
+  ip:         { type: String, default: null },
+  userAgent:  { type: String, default: null },
+  metadata:   { type: Schema.Types.Mixed, default: null }
+}, { _id: true, timestamps: false })
+
 const clienteSchema = new Schema({
   nombre:    { type: String, required: true, trim: true },
   apellido:  { type: String, required: true, trim: true },
@@ -23,7 +44,7 @@ const clienteSchema = new Schema({
   // Activo/Inactivo
   status: { type: Boolean, default: true },
 
-  // Advertencias / suspensión (modelo interno)
+  // Estado visible para UI (modelo interno)
   estado_Emprendedor: {
     type: String,
     enum: ['Activo', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido'],
@@ -32,13 +53,16 @@ const clienteSchema = new Schema({
 
   /* ============================
      📸 Foto de perfil (Cloudinary)
-     Igual que en Administrador/Emprendedor
   ============================ */
-  // URL pública (secure_url de Cloudinary)
   foto:         { type: String, default: null },
-  // public_id para borrar/reemplazar en Cloudinary
-  fotoPublicId: { type: String, default: null }
+  fotoPublicId: { type: String, default: null },
 
+  /* ============================
+     🧾 Auditoría embebida
+  ============================ */
+  advertencias:        { type: [AdvertenciaSchema], default: [] },
+  ultimaAdvertenciaAt: { type: Date, default: null },
+  suspendidoHasta:     { type: Date, default: null } // opcional: suspensiones temporales
 }, { timestamps: true })
 
 /* ============================
@@ -59,35 +83,75 @@ clienteSchema.methods.crearToken = function () {
 }
 
 /**
- * Aplica el estado proveniente de la UI:
- * - 'Correcto'     => estado_Emprendedor='Activo', status=true
- * - 'AdvertenciaX' => estado_Emprendedor='AdvertenciaX' (status no se fuerza)
- * - 'Suspendido'   => estado_Emprendedor='Suspendido', status=false
+ * Método interno: registra un evento de cambio de estado + denormaliza estado actual.
  */
-clienteSchema.methods.aplicarEstadoUI = function (estadoUI) {
+clienteSchema.methods._registrarEventoEstado = function ({
+  nuevoEstado, motivo, adminId = null, origen = 'manual', ip = null, userAgent = null, metadata = null
+}) {
+  // Evento inmutable
+  this.advertencias.push({
+    tipo: nuevoEstado === 'Activo' ? 'Correccion' : nuevoEstado,
+    motivo,
+    creadoPor: adminId || null,
+    origen,
+    ip,
+    userAgent,
+    metadata,
+    fecha: new Date()
+  })
+
+  // Denormalización
+  this.estado_Emprendedor = nuevoEstado
+  this.ultimaAdvertenciaAt = new Date()
+
+  // Reglas de coherencia
+  if (nuevoEstado === 'Suspendido') this.status = false
+  if (nuevoEstado === 'Activo')     this.status = true
+}
+
+/**
+ * Cambiar estado explícito recibido desde la UI/Admin.
+ * estadoUI: 'Correcto' | 'Advertencia1' | 'Advertencia2' | 'Advertencia3' | 'Suspendido'
+ */
+clienteSchema.methods.cambiarEstado = function ({ estadoUI, motivo, adminId, ip, userAgent, metadata }) {
   const PERMITIDOS = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
   if (!PERMITIDOS.includes(estadoUI)) {
     throw new Error(`Estado UI inválido: ${estadoUI}`)
   }
-
-  if (estadoUI === 'Correcto') {
-    this.estado_Emprendedor = 'Activo'
-    this.status = true
-  } else if (estadoUI === 'Suspendido') {
-    this.estado_Emprendedor = 'Suspendido'
-    this.status = false
-  } else {
-    // Advertencia1/2/3
-    this.estado_Emprendedor = estadoUI
-    // Si quieres asegurarte que advertencias sigan "activas", podrías forzar:
-    // this.status = true
+  const target = (estadoUI === 'Correcto') ? 'Activo' : estadoUI
+  if (!motivo || !String(motivo).trim()) {
+    throw new Error('El motivo es obligatorio')
   }
+  this._registrarEventoEstado({ nuevoEstado: target, motivo, adminId, ip, userAgent, metadata })
+  return target
+}
+
+/**
+ * Escalado automático de Advertencia1 -> 2 -> 3 -> Suspendido
+ */
+clienteSchema.methods.aplicarAdvertencia = function ({ motivo, adminId, ip, userAgent, metadata }) {
+  const count = this.advertencias.filter(a => a.tipo && a.tipo.startsWith('Advertencia')).length
+  const siguiente = Math.min(count + 1, 3)
+  const nuevoEstado = (siguiente >= 3) ? 'Suspendido' : `Advertencia${siguiente}`
+  if (!motivo || !String(motivo).trim()) {
+    throw new Error('El motivo es obligatorio')
+  }
+  this._registrarEventoEstado({ nuevoEstado, motivo, adminId, ip, userAgent, metadata })
+  return nuevoEstado
+}
+
+/**
+ * Compatibilidad: mantiene tu API previa pero ahora delega en cambiarEstado.
+ */
+clienteSchema.methods.aplicarEstadoUI = function (estadoUI) {
+  return this.cambiarEstado({ estadoUI, motivo: 'Cambio desde UI', adminId: null, origen: 'manual' })
 }
 
 /**
  * Coherencia automática antes de guardar:
  * - 'Suspendido' => status=false
  * - 'Activo' con status=false => se fuerza status=true
+ * - Levantar suspensión temporal si ya expiró
  */
 clienteSchema.pre('save', function (next) {
   if (this.estado_Emprendedor === 'Suspendido') {
@@ -95,6 +159,17 @@ clienteSchema.pre('save', function (next) {
   }
   if (this.estado_Emprendedor === 'Activo' && this.status === false) {
     this.status = true
+  }
+
+  // Auto-reactivar si expiró una suspensión temporal
+  if (this.suspendidoHasta && new Date() > this.suspendidoHasta && this.estado_Emprendedor === 'Suspendido') {
+    this._registrarEventoEstado({
+      nuevoEstado: 'Activo',
+      motivo: 'Fin de suspensión automática',
+      adminId: null,
+      origen: 'sistema'
+    })
+    this.suspendidoHasta = null
   }
   next()
 })
