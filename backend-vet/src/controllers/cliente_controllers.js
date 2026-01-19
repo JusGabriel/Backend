@@ -243,7 +243,7 @@ const verClientes = async (req, res) => {
 
 /* ============================
    Actualizar datos (perfil por ID)
-   ⚠️ NO permite cambiar estado ni suspensión. Solo datos básicos.
+   ⚠️ NO permite cambiar estado/suspensión.
 ============================ */
 const actualizarCliente = async (req, res) => {
   const { id } = req.params
@@ -254,11 +254,10 @@ const actualizarCliente = async (req, res) => {
 
     const {
       nombre, apellido, email, password, telefono,
-      // Si llegan estos campos, se rechaza (estado solo en /estado/:id por Admin)
       estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status
     } = req.body
 
-    // Rechazar cualquier intento de cambiar estado por aquí
+    // Rechazar intentos de cambio de estado/suspensión/status en esta ruta
     if (
       estado !== undefined ||
       estado_Cliente !== undefined ||
@@ -267,7 +266,9 @@ const actualizarCliente = async (req, res) => {
       motivo !== undefined ||
       status !== undefined
     ) {
-      return res.status(403).json({ msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id con rol Administrador.' })
+      return res.status(403).json({
+        msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id con rol Administrador.'
+      })
     }
 
     // Actualización de datos básicos
