@@ -222,6 +222,7 @@ const actualizarCliente = async (req, res) => {
       estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status
     } = req.body
 
+    // ⚠️ Esta ruta NO cambia estado/suspensión
     if ([estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status].some(v => v !== undefined)) {
       return res.status(403).json({ msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id.' })
     }
@@ -337,48 +338,8 @@ const eliminarFotoPerfil = async (req, res) => {
   }
 }
 
-/* === estado (SIN middleware, según tu pedido) === */
+/* === estado (SIN middleware, según tu requerimiento) === */
 const ESTADOS_UI = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
-
-/* Saneo defensivo extra (además del pre('validate') del modelo) */
-function fixDateValue(val) {
-  if (!val) return val
-  if (val instanceof Date) return isNaN(val.getTime()) ? null : val
-  if (typeof val === 'object' && val.$date) {
-    const d = new Date(val.$date)
-    return isNaN(d.getTime()) ? null : d
-  }
-  if (typeof val === 'string' || typeof val === 'number') {
-    const d = new Date(val)
-    return isNaN(d.getTime()) ? null : d
-  }
-  return null
-}
-function sanitizeClienteDates(cliente) {
-  try {
-    if (cliente.createdAt) {
-      const d = fixDateValue(cliente.createdAt); if (d) cliente.createdAt = d
-    }
-    if (cliente.updatedAt) {
-      const d = fixDateValue(cliente.updatedAt); if (d) cliente.updatedAt = d
-    }
-    if (cliente.ultimaAdvertenciaAt !== undefined && cliente.ultimaAdvertenciaAt !== null) {
-      const d = fixDateValue(cliente.ultimaAdvertenciaAt); cliente.ultimaAdvertenciaAt = d || null
-    }
-    if (cliente.suspendidoHasta !== undefined && cliente.suspendidoHasta !== null) {
-      const d = fixDateValue(cliente.suspendidoHasta); cliente.suspendidoHasta = d || null
-    }
-    if (Array.isArray(cliente.advertencias)) {
-      cliente.advertencias = cliente.advertencias.map(a => {
-        if (!a) return a
-        if (a.fecha !== undefined && a.fecha !== null) {
-          const d = fixDateValue(a.fecha); a.fecha = d || new Date()
-        }
-        return a
-      })
-    }
-  } catch (_) {}
-}
 
 const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
@@ -396,9 +357,6 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    // 🔧 Saneo extra (por si existen valores Extended JSON en este doc)
-    sanitizeClienteDates(cliente)
-
     cliente.cambiarEstado({
       estadoUI: nuevoEstadoUI,
       motivo: motivo.trim(),
@@ -407,7 +365,7 @@ const actualizarEstadoClienteById = async (req, res) => {
       metadata: metadata ?? null
     })
 
-    if (nuevoEstadoUI === 'Suspendido') {
+    if ( nuevoEstadoUI === 'Suspendido') {
       const { has, date } = parseOptionalUntil(suspendidoHasta)
       if (has && !date) {
         return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO (con o sin offset), datetime-local, Date o epoch.' })
@@ -429,6 +387,63 @@ const actualizarEstadoClienteById = async (req, res) => {
   } catch (error) {
     const code = (error.name === 'ValidationError') ? 400 : 500
     return res.status(code).json({ msg: 'Error al actualizar el estado', error: error.message })
+  }
+}
+
+/* === NUEVO: aplicar advertencia (progresión + motivo + suspensión opcional) === */
+const advertirClienteById = async (req, res) => {
+  const { id } = req.params
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ msg: 'El ID no es válido' })
+  }
+
+  const { motivo, suspendidoHasta, metadata } = req.body
+  if (!motivo || !String(motivo).trim()) {
+    return res.status(400).json({ msg: 'Debes enviar "motivo"' })
+  }
+
+  try {
+    const cliente = await Cliente.findById(id)
+    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
+    const nuevoEstado = cliente.aplicarAdvertencia({
+      motivo: motivo.trim(),
+      adminId: null, adminNombre: null, adminEmail: null,
+      ip: req.ip, userAgent: req.headers['user-agent'],
+      metadata: metadata ?? null
+    })
+
+    if (nuevoEstado === 'Suspendido') {
+      const { has, date } = parseOptionalUntil(suspendidoHasta)
+      if (has && !date) {
+        return res.status(400).json({
+          msg: 'suspendidoHasta inválido. Usa ISO (con o sin offset), datetime-local, Date o epoch.'
+        })
+      }
+      cliente.suspendidoHasta = has ? date : null
+    } else {
+      cliente.suspendidoHasta = null
+    }
+
+    await cliente.save()
+
+    const estadoUI =
+      (cliente.status === false) ? 'Suspendido'
+      : (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(cliente.estado_Emprendedor)
+          ? cliente.estado_Emprendedor
+          : 'Correcto')
+
+    return res.status(200).json({
+      msg: 'Advertencia aplicada correctamente',
+      estadoUI,
+      estado_Emprendedor: cliente.estado_Emprendedor,
+      status: cliente.status,
+      ultimaAdvertenciaAt: cliente.ultimaAdvertenciaAt,
+      suspendidoHasta: cliente.suspendidoHasta
+    })
+  } catch (error) {
+    const code = (error.name === 'ValidationError') ? 400 : 500
+    return res.status(code).json({ msg: 'Error al aplicar advertencia', error: error.message })
   }
 }
 
@@ -460,5 +475,6 @@ export {
   registro, confirmarMail, recuperarPassword, comprobarTokenPasword, crearNuevoPassword,
   login, verClientes, actualizarCliente, eliminarCliente, perfil, actualizarPassword,
   actualizarPerfil, actualizarEstadoClienteById, actualizarFotoPerfil, eliminarFotoPerfil,
-  listarAuditoriaCliente
+  listarAuditoriaCliente,
+  advertirClienteById   // <-- NUEVO export
 }
