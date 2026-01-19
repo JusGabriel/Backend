@@ -46,6 +46,23 @@ function objectIdToDate(oid) {
   return null
 }
 
+/**
+ * Normaliza un valor opcional de fecha:
+ * - Ignora null/undefined/""/"null"/"undefined"
+ * - Si viene algo y no es fecha válida -> has=true, date=null (para responder 400)
+ * - Si es válida -> has=true, date=Date
+ */
+function parseOptionalUntil(val) {
+  if (val === null || val === undefined) return { has: false, date: null }
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase()
+    if (!s || s === 'null' || s === 'undefined') return { has: false, date: null }
+  }
+  const d = new Date(val)
+  if (isNaN(d.getTime())) return { has: true, date: null }
+  return { has: true, date: d }
+}
+
 /* ============================
    Registro / confirmación / recuperación
 ============================ */
@@ -202,7 +219,6 @@ const verClientes = async (req, res) => {
         ? c.advertencias[c.advertencias.length - 1]
         : null
 
-      // Fallback de fecha segura
       const ultimaFecha =
         (ultima?.fecha && !isNaN(new Date(ultima.fecha))) ? ultima.fecha :
         (ultima?._id ? objectIdToDate(ultima._id) : null)
@@ -237,7 +253,7 @@ const actualizarCliente = async (req, res) => {
 
     const {
       nombre, apellido, email, password, telefono,
-      estado, estado_Cliente, estado_Emprendedor, status
+      estado, estado_Cliente, estado_Emprendedor, status, suspendidoHasta, motivo
     } = req.body
 
     if (nombre) {
@@ -261,11 +277,11 @@ const actualizarCliente = async (req, res) => {
     // Cambiar estado desde UI (si viene)
     const estadoUI = (estado ?? estado_Cliente ?? '').trim()
     if (estadoUI) {
-      const motivo = (req.body.motivo && String(req.body.motivo).trim()) || 'Cambio desde actualizarCliente'
+      const razon = (motivo && String(motivo).trim()) || 'Cambio desde actualizarCliente'
       try {
         cliente.cambiarEstado({
           estadoUI,
-          motivo,
+          motivo: razon,
           adminId,
           adminNombre,
           adminEmail,
@@ -273,8 +289,18 @@ const actualizarCliente = async (req, res) => {
           userAgent: req.headers['user-agent']
         })
       } catch (e) {
-        // ⚠️ Devuelve 400 con detalle para que el frontend no vea un 500 “genérico”
         return res.status(400).json({ msg: e.message })
+      }
+
+      // Manejo de suspensión temporal también en /actualizar/:id (fallback)
+      if (estadoUI === 'Suspendido') {
+        const { has, date } = parseOptionalUntil(suspendidoHasta)
+        if (has && !date) {
+          return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 o un datetime-local válido.' })
+        }
+        cliente.suspendidoHasta = has ? date : null
+      } else {
+        cliente.suspendidoHasta = null
       }
     }
 
@@ -285,11 +311,11 @@ const actualizarCliente = async (req, res) => {
         return res.status(400).json({ msg: `estado_Emprendedor inválido. Permitidos: ${vals.join(', ')}` })
       }
       const estadoUICompat = (estado_Emprendedor === 'Activo') ? 'Correcto' : estado_Emprendedor
-      const motivoCompat = (req.body.motivo && String(req.body.motivo).trim()) || 'Cambio directo de estado_Emprendedor'
+      const razonCompat = (motivo && String(motivo).trim()) || 'Cambio directo de estado_Emprendedor'
       try {
         cliente.cambiarEstado({
           estadoUI: estadoUICompat,
-          motivo: motivoCompat,
+          motivo: razonCompat,
           adminId,
           adminNombre,
           adminEmail,
@@ -298,6 +324,16 @@ const actualizarCliente = async (req, res) => {
         })
       } catch (e) {
         return res.status(400).json({ msg: e.message })
+      }
+
+      if (estado_Emprendedor === 'Suspendido') {
+        const { has, date } = parseOptionalUntil(suspendidoHasta)
+        if (has && !date) {
+          return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 o un datetime-local válido.' })
+        }
+        cliente.suspendidoHasta = has ? date : null
+      } else {
+        cliente.suspendidoHasta = null
       }
     }
 
@@ -308,7 +344,6 @@ const actualizarCliente = async (req, res) => {
     const actualizado = await cliente.save()
     res.status(200).json(actualizado)
   } catch (error) {
-    // 👇 Incluir detalle para depurar
     res.status(500).json({ msg: 'Error al actualizar cliente', error: error.message })
   }
 }
@@ -490,12 +525,13 @@ const actualizarEstadoClienteById = async (req, res) => {
       metadata: metadata ?? null
     })
 
-    // Suspensión temporal opcional (validada)
-    if (nuevoEstadoUI === 'Suspendido' && suspendidoHasta) {
-      if (!isValidDateValue(suspendidoHasta)) {
+    // Suspensión temporal opcional (normalizada)
+    if (nuevoEstadoUI === 'Suspendido') {
+      const { has, date } = parseOptionalUntil(suspendidoHasta)
+      if (has && !date) {
         return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 o un datetime-local válido.' })
       }
-      cliente.suspendidoHasta = new Date(suspendidoHasta)
+      cliente.suspendidoHasta = has ? date : null
     } else {
       cliente.suspendidoHasta = null
     }
