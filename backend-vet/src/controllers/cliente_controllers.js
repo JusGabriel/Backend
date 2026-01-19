@@ -243,6 +243,7 @@ const verClientes = async (req, res) => {
 
 /* ============================
    Actualizar datos (perfil por ID)
+   ⚠️ NO permite cambiar estado ni suspensión. Solo datos básicos.
 ============================ */
 const actualizarCliente = async (req, res) => {
   const { id } = req.params
@@ -253,9 +254,23 @@ const actualizarCliente = async (req, res) => {
 
     const {
       nombre, apellido, email, password, telefono,
-      estado, estado_Cliente, estado_Emprendedor, status, suspendidoHasta, motivo
+      // Si llegan estos campos, se rechaza (estado solo en /estado/:id por Admin)
+      estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status
     } = req.body
 
+    // Rechazar cualquier intento de cambiar estado por aquí
+    if (
+      estado !== undefined ||
+      estado_Cliente !== undefined ||
+      estado_Emprendedor !== undefined ||
+      suspendidoHasta !== undefined ||
+      motivo !== undefined ||
+      status !== undefined
+    ) {
+      return res.status(403).json({ msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id con rol Administrador.' })
+    }
+
+    // Actualización de datos básicos
     if (nombre) {
       const e1 = validarNombre(nombre); if (e1) return res.status(400).json({ msg: e1 })
       cliente.nombre = nombre
@@ -264,82 +279,9 @@ const actualizarCliente = async (req, res) => {
       const e2 = validarTelefono(telefono); if (e2) return res.status(400).json({ msg: e2 })
       cliente.telefono = telefono
     }
-
     if (apellido) cliente.apellido = apellido
     if (email)    cliente.email    = email
     if (password) cliente.password = await cliente.encrypPassword(password)
-
-    // Datos del admin ejecutor (opcional)
-    const adminId     = req.adminBDD?._id || null
-    const adminNombre = req.adminBDD ? `${req.adminBDD.nombre} ${req.adminBDD.apellido || ''}`.trim() : null
-    const adminEmail  = req.adminBDD?.email || null
-
-    // Cambiar estado desde UI (si viene)
-    const estadoUI = (estado ?? estado_Cliente ?? '').trim()
-    if (estadoUI) {
-      const razon = (motivo && String(motivo).trim()) || 'Cambio desde actualizarCliente'
-      try {
-        cliente.cambiarEstado({
-          estadoUI,
-          motivo: razon,
-          adminId,
-          adminNombre,
-          adminEmail,
-          ip: req.ip,
-          userAgent: req.headers['user-agent']
-        })
-      } catch (e) {
-        return res.status(400).json({ msg: e.message })
-      }
-
-      // Manejo de suspensión temporal también en /actualizar/:id (fallback)
-      if (estadoUI === 'Suspendido') {
-        const { has, date } = parseOptionalUntil(suspendidoHasta)
-        if (has && !date) {
-          return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 o un datetime-local válido.' })
-        }
-        cliente.suspendidoHasta = has ? date : null
-      } else {
-        cliente.suspendidoHasta = null
-      }
-    }
-
-    // Cambio directo de estado_Emprendedor (compatibilidad)
-    if (estado_Emprendedor) {
-      const vals = ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido']
-      if (!vals.includes(estado_Emprendedor)) {
-        return res.status(400).json({ msg: `estado_Emprendedor inválido. Permitidos: ${vals.join(', ')}` })
-      }
-      const estadoUICompat = (estado_Emprendedor === 'Activo') ? 'Correcto' : estado_Emprendedor
-      const razonCompat = (motivo && String(motivo).trim()) || 'Cambio directo de estado_Emprendedor'
-      try {
-        cliente.cambiarEstado({
-          estadoUI: estadoUICompat,
-          motivo: razonCompat,
-          adminId,
-          adminNombre,
-          adminEmail,
-          ip: req.ip,
-          userAgent: req.headers['user-agent']
-        })
-      } catch (e) {
-        return res.status(400).json({ msg: e.message })
-      }
-
-      if (estado_Emprendedor === 'Suspendido') {
-        const { has, date } = parseOptionalUntil(suspendidoHasta)
-        if (has && !date) {
-          return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 o un datetime-local válido.' })
-        }
-        cliente.suspendidoHasta = has ? date : null
-      } else {
-        cliente.suspendidoHasta = null
-      }
-    }
-
-    if (typeof status === 'boolean') {
-      cliente.status = status
-    }
 
     const actualizado = await cliente.save()
     res.status(200).json(actualizado)
@@ -483,7 +425,7 @@ const eliminarFotoPerfil = async (req, res) => {
 }
 
 /* ============================
-   Estado por ID (UI → Modelo)
+   Estado por ID (UI → Modelo) — SOLO ADMIN
 ============================ */
 const ESTADOS_UI = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
 
@@ -509,7 +451,7 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    // Admin ejecutor (de tu middleware JWT)
+    // Admin ejecutor (inyectado por middleware JWT + requireRole)
     const adminId     = req.adminBDD?._id || null
     const adminNombre = req.adminBDD ? `${req.adminBDD.nombre} ${req.adminBDD.apellido || ''}`.trim() : null
     const adminEmail  = req.adminBDD?.email || null
