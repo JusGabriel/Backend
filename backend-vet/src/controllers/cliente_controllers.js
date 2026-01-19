@@ -235,7 +235,10 @@ const actualizarCliente = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    const { nombre, apellido, email, password, telefono, estado, estado_Cliente, estado_Emprendedor, status } = req.body
+    const {
+      nombre, apellido, email, password, telefono,
+      estado, estado_Cliente, estado_Emprendedor, status
+    } = req.body
 
     if (nombre) {
       const e1 = validarNombre(nombre); if (e1) return res.status(400).json({ msg: e1 })
@@ -256,9 +259,9 @@ const actualizarCliente = async (req, res) => {
     const adminEmail  = req.adminBDD?.email || null
 
     // Cambiar estado desde UI (si viene)
-    const estadoUI = estado ?? estado_Cliente
+    const estadoUI = (estado ?? estado_Cliente ?? '').trim()
     if (estadoUI) {
-      const motivo = req.body.motivo || 'Cambio desde actualizarCliente'
+      const motivo = (req.body.motivo && String(req.body.motivo).trim()) || 'Cambio desde actualizarCliente'
       try {
         cliente.cambiarEstado({
           estadoUI,
@@ -282,7 +285,7 @@ const actualizarCliente = async (req, res) => {
         return res.status(400).json({ msg: `estado_Emprendedor inválido. Permitidos: ${vals.join(', ')}` })
       }
       const estadoUICompat = (estado_Emprendedor === 'Activo') ? 'Correcto' : estado_Emprendedor
-      const motivoCompat = req.body.motivo || 'Cambio directo de estado_Emprendedor'
+      const motivoCompat = (req.body.motivo && String(req.body.motivo).trim()) || 'Cambio directo de estado_Emprendedor'
       try {
         cliente.cambiarEstado({
           estadoUI: estadoUICompat,
@@ -456,7 +459,7 @@ const actualizarEstadoClienteById = async (req, res) => {
   }
 
   const { estado, estado_Cliente, motivo, suspendidoHasta, metadata } = req.body
-  const nuevoEstadoUI = estado ?? estado_Cliente
+  const nuevoEstadoUI = (estado ?? estado_Cliente ?? '').trim()
   if (!nuevoEstadoUI) {
     return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
   }
@@ -478,7 +481,7 @@ const actualizarEstadoClienteById = async (req, res) => {
 
     cliente.cambiarEstado({
       estadoUI: nuevoEstadoUI,
-      motivo,
+      motivo: motivo.trim(),
       adminId,
       adminNombre,
       adminEmail,
