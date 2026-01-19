@@ -162,10 +162,18 @@ const login = async (req, res) => {
   })
 }
 
-/* === listar (LECTURA PURA): NO GUARDA NADA para no romper el listado === */
+/* === listar (LECTURA PURA): proyección + paginación) === */
 const verClientes = async (req, res) => {
   try {
-    const clientes = await Cliente.find().lean() // <- solo lectura
+    const page = Math.max(1, parseInt(req.query.page ?? '1', 10))
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit ?? '20', 10)))
+    const skip = (page - 1) * limit
+
+    const [clientes, total] = await Promise.all([
+      Cliente.find({}, '-password -token -__v').skip(skip).limit(limit).lean(),
+      Cliente.countDocuments()
+    ])
+
     const decorados = clientes.map((c) => {
       let estadoUI = 'Correcto'
       if (c.status === false) estadoUI = 'Suspendido'
@@ -187,7 +195,7 @@ const verClientes = async (req, res) => {
       }
     })
 
-    res.status(200).json(decorados)
+    res.status(200).json({ total, page, limit, items: decorados })
   } catch (error) {
     res.status(500).json({ msg: 'Error al obtener los clientes', error: error.message })
   }
@@ -321,7 +329,7 @@ const eliminarFotoPerfil = async (req, res) => {
   }
 }
 
-/* === estado (SIN middleware) === */
+/* === estado (SIN tocar middleware; usamos req.adminBDD) === */
 const ESTADOS_UI = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
 
 const actualizarEstadoClienteById = async (req, res) => {
@@ -339,15 +347,19 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
+    const adminId = req.adminBDD?._id ?? null
+    const adminNombre = req.adminBDD ? `${req.adminBDD.nombre || ''} ${req.adminBDD.apellido || ''}`.trim() || null : null
+    const adminEmail = req.adminBDD?.email ?? null
+
     cliente.cambiarEstado({
       estadoUI: nuevoEstadoUI,
       motivo: motivo.trim(),
-      adminId: null, adminNombre: null, adminEmail: null,
+      adminId, adminNombre, adminEmail,
       ip: req.ip, userAgent: req.headers['user-agent'],
       metadata: metadata ?? null
     })
 
-    if ( nuevoEstadoUI === 'Suspendido') {
+    if (nuevoEstadoUI === 'Suspendido') {
       const { has, date } = parseOptionalUntil(suspendidoHasta)
       if (has && !date) {
         return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO (con o sin offset), datetime-local, Date o epoch.' })
@@ -388,9 +400,13 @@ const advertirClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
+    const adminId = req.adminBDD?._id ?? null
+    const adminNombre = req.adminBDD ? `${req.adminBDD.nombre || ''} ${req.adminBDD.apellido || ''}`.trim() || null : null
+    const adminEmail = req.adminBDD?.email ?? null
+
     const nuevoEstado = cliente.aplicarAdvertencia({
       motivo: motivo.trim(),
-      adminId: null, adminNombre: null, adminEmail: null,
+      adminId, adminNombre, adminEmail,
       ip: req.ip, userAgent: req.headers['user-agent'],
       metadata: metadata ?? null
     })
