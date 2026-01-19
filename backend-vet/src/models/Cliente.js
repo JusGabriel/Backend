@@ -1,5 +1,3 @@
-
-// models/Cliente.js
 import { Schema, model } from 'mongoose'
 import bcrypt from 'bcryptjs'
 
@@ -47,7 +45,7 @@ const clienteSchema = new Schema({
   suspendidoHasta:     { type: Date, default: null }
 }, { timestamps: true })
 
-/* Métodos */
+/* Métodos de seguridad */
 clienteSchema.methods.encrypPassword = async function (password) {
   const salt = await bcrypt.genSalt(10)
   return await bcrypt.hash(password, salt)
@@ -60,68 +58,73 @@ clienteSchema.methods.crearToken = function () {
   return this.token
 }
 
+/* Lógica de Estados */
 clienteSchema.methods._registrarEventoEstado = function ({
   nuevoEstado, motivo, adminId=null, adminNombre=null, adminEmail=null,
   origen='manual', ip=null, userAgent=null, metadata=null
 }) {
   const ahora = new Date()
+  
+  // Mapeo: Si el admin lo pone como Activo, el log registra "Correccion" o "Reactivado"
+  let tipoEvento = nuevoEstado
+  if (nuevoEstado === 'Activo') {
+    tipoEvento = (motivo.toLowerCase().includes('automática')) ? 'Reactivado' : 'Correccion'
+  }
+
   this.advertencias.push({
-    tipo: nuevoEstado === 'Activo' ? 'Correccion' : nuevoEstado,
+    tipo: tipoEvento,
     motivo,
-    creadoPor: adminId || null,
-    creadoPorNombre: adminNombre || null,
-    creadoPorEmail:  adminEmail  || null,
+    creadoPor: adminId,
+    creadoPorNombre: adminNombre,
+    creadoPorEmail:  adminEmail,
     origen, ip, userAgent, metadata,
     fecha: ahora
   })
+
   this.estado_Emprendedor = nuevoEstado
   this.ultimaAdvertenciaAt = ahora
+  this.status = (nuevoEstado !== 'Suspendido')
 
-  if (nuevoEstado === 'Suspendido') this.status = false
-  if (nuevoEstado === 'Activo')     this.status = true
+  if (nuevoEstado === 'Activo') this.suspendidoHasta = null
 }
 
-clienteSchema.methods.cambiarEstado = function ({
-  estadoUI, motivo, adminId, adminNombre, adminEmail, ip, userAgent, metadata
-}) {
+clienteSchema.methods.cambiarEstado = function (datos) {
+  const { estadoUI, motivo } = datos
   const PERMITIDOS = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
-  if (!PERMITIDOS.includes(estadoUI)) throw new Error(`Estado UI inválido: ${estadoUI}`)
-  if (!motivo || !String(motivo).trim()) throw new Error('El motivo es obligatorio')
+  if (!PERMITIDOS.includes(estadoUI)) throw new Error(`Estado inválido: ${estadoUI}`)
+  if (!motivo?.trim()) throw new Error('El motivo es obligatorio')
 
   const target = (estadoUI === 'Correcto') ? 'Activo' : estadoUI
-  this._registrarEventoEstado({
-    nuevoEstado: target, motivo, adminId, adminNombre, adminEmail, ip, userAgent, metadata
-  })
+  this._registrarEventoEstado({ ...datos, nuevoEstado: target })
   return target
 }
 
-clienteSchema.methods.aplicarAdvertencia = function ({ motivo, adminId, adminNombre, adminEmail, ip, userAgent, metadata }) {
-  if (!motivo || !String(motivo).trim()) throw new Error('El motivo es obligatorio')
-  const count = this.advertencias.filter(a => a.tipo && a.tipo.startsWith('Advertencia')).length
-  const siguiente = Math.min(count + 1, 3)
+clienteSchema.methods.aplicarAdvertencia = function (datos) {
+  if (!datos.motivo?.trim()) throw new Error('El motivo es obligatorio')
+
+  // BUSCAR ÚLTIMO RESET: Ignoramos advertencias previas a una corrección/reactivación
+  const ultimoReset = [...this.advertencias].reverse().find(a => a.tipo === 'Correccion' || a.tipo === 'Reactivado')
+  const fechaCorte = ultimoReset ? ultimoReset.fecha : new Date(0)
+
+  const count = this.advertencias.filter(a => 
+    a.tipo.startsWith('Advertencia') && a.fecha > fechaCorte
+  ).length
+
+  const siguiente = count + 1
   const nuevoEstado = (siguiente >= 3) ? 'Suspendido' : `Advertencia${siguiente}`
-  this._registrarEventoEstado({ nuevoEstado, motivo, adminId, adminNombre, adminEmail, ip, userAgent, metadata })
+  
+  this._registrarEventoEstado({ ...datos, nuevoEstado })
   return nuevoEstado
 }
 
-clienteSchema.methods.aplicarEstadoUI = function (estadoUI) {
-  return this.cambiarEstado({ estadoUI, motivo: 'Cambio desde UI', adminId: null /* origen por defecto: manual */ })
-}
-
-/* Coherencia + auto-reactivar */
 clienteSchema.pre('save', function (next) {
-  if (Array.isArray(this.advertencias)) {
-    this.advertencias = this.advertencias.map(a =>
-      (!a.fecha || isNaN(new Date(a.fecha))) ? { ...a, fecha: new Date() } : a
-    )
-  }
-  if (this.estado_Emprendedor === 'Suspendido') this.status = false
-  if (this.estado_Emprendedor === 'Activo' && this.status === false) this.status = true
-
-  // Si ya venció la suspensión, reactivar automáticamente
+  // Auto-reactivación si la fecha venció
   if (this.suspendidoHasta && new Date() > this.suspendidoHasta && this.estado_Emprendedor === 'Suspendido') {
-    this._registrarEventoEstado({ nuevoEstado: 'Activo', motivo: 'Fin de suspensión automática', origen: 'sistema' })
-    this.suspendidoHasta = null
+    this._registrarEventoEstado({ 
+      nuevoEstado: 'Activo', 
+      motivo: 'Fin de suspensión automática (vencimiento)', 
+      origen: 'sistema' 
+    })
   }
   next()
 })
