@@ -1,7 +1,7 @@
 
 // controllers/cliente_controllers.js
 import Cliente from '../models/Cliente.js'
-import Emprendimiento from '../models/Emprendimiento.js' // si lo usas en otros métodos
+import Emprendimiento from '../models/Emprendimiento.js'
 import mongoose from 'mongoose'
 import {
   sendMailToRegisterCliente,
@@ -11,7 +11,7 @@ import { crearTokenJWT } from '../middleware/JWT.js'
 import cloudinary from '../config/cloudinary.js'
 
 /* ============================
-   Validaciones internas
+   Helpers
 ============================ */
 function validarNombre(nombre) {
   if (!nombre || typeof nombre !== 'string' || !/^[a-zA-Z\s]+$/.test(nombre.trim())) {
@@ -28,6 +28,20 @@ function validarTelefono(telefono) {
   const telefonoStr = telefono.toString()
   if (!/^\d{7,15}$/.test(telefonoStr)) {
     return 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos'
+  }
+  return null
+}
+
+function isValidDateValue(val) {
+  const d = new Date(val)
+  return !isNaN(d.getTime())
+}
+function objectIdToDate(oid) {
+  const s = String(oid || '')
+  if (s.length >= 8) {
+    const ts = parseInt(s.substring(0, 8), 16) * 1000
+    const d = new Date(ts)
+    if (!isNaN(d.getTime())) return d
   }
   return null
 }
@@ -123,20 +137,15 @@ const login = async (req, res) => {
   const ok = await clienteBDD.matchPassword(password)
   if (!ok) return res.status(401).json({ msg: 'El password no es el correcto' })
 
-  // Derivar estado UI
+  // Estado visible UI
   let estadoUI = 'Correcto'
   if (clienteBDD.status === false) {
     estadoUI = 'Suspendido'
   } else {
     const e = clienteBDD.estado_Emprendedor
-    if (['Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido'].includes(e)) {
-      estadoUI = e
-    } else {
-      estadoUI = 'Correcto' // Activo
-    }
+    estadoUI = (['Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido'].includes(e)) ? e : 'Correcto'
   }
 
-  // Bloquear login si está suspendido
   if (estadoUI === 'Suspendido') {
     return res.status(403).json({
       msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.',
@@ -146,7 +155,6 @@ const login = async (req, res) => {
     })
   }
 
-  // Última advertencia (para banners)
   const ultima = (clienteBDD.advertencias?.length || 0) > 0
     ? clienteBDD.advertencias[clienteBDD.advertencias.length - 1]
     : null
@@ -169,10 +177,7 @@ const login = async (req, res) => {
     ultimaAdvertencia: ultima ? {
       tipo: ultima.tipo,
       motivo: ultima.motivo,
-      fecha: ultima.fecha,
-      // opcional: podrías incluir estos snapshots aquí si los quieres en login
-      // creadoPorNombre: ultima.creadoPorNombre || null,
-      // creadoPorEmail:  ultima.creadoPorEmail  || null
+      fecha: ultima.fecha
     } : null
   })
 }
@@ -190,16 +195,17 @@ const verClientes = async (req, res) => {
         estadoUI = 'Suspendido'
       } else {
         const e = c.estado_Emprendedor
-        if (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)) {
-          estadoUI = e
-        } else {
-          estadoUI = 'Correcto'
-        }
+        estadoUI = (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)) ? e : 'Correcto'
       }
 
       const ultima = (c.advertencias?.length || 0) > 0
         ? c.advertencias[c.advertencias.length - 1]
         : null
+
+      // Fallback de fecha segura
+      const ultimaFecha =
+        (ultima?.fecha && !isNaN(new Date(ultima.fecha))) ? ultima.fecha :
+        (ultima?._id ? objectIdToDate(ultima._id) : null)
 
       return {
         ...c,
@@ -208,14 +214,14 @@ const verClientes = async (req, res) => {
         ultimaAdvertencia: ultima ? {
           tipo: ultima.tipo,
           motivo: ultima.motivo,
-          fecha: ultima.fecha
+          fecha: ultimaFecha
         } : null
       }
     })
 
     res.status(200).json(decorados)
   } catch (error) {
-    res.status(500).json({ msg: 'Error al obtener los clientes' })
+    res.status(500).json({ msg: 'Error al obtener los clientes', error: error.message })
   }
 }
 
@@ -244,12 +250,12 @@ const actualizarCliente = async (req, res) => {
     if (email)    cliente.email    = email
     if (password) cliente.password = await cliente.encrypPassword(password)
 
-    // Datos del admin ejecutor (middleware)
+    // Datos del admin ejecutor (opcional)
     const adminId     = req.adminBDD?._id || null
     const adminNombre = req.adminBDD ? `${req.adminBDD.nombre} ${req.adminBDD.apellido || ''}`.trim() : null
     const adminEmail  = req.adminBDD?.email || null
 
-    // Cambiar estado desde UI (fallback) — si viene, exige motivo mínimamente
+    // Cambiar estado desde UI (si viene)
     const estadoUI = estado ?? estado_Cliente
     if (estadoUI) {
       const motivo = req.body.motivo || 'Cambio desde actualizarCliente'
@@ -264,39 +270,43 @@ const actualizarCliente = async (req, res) => {
           userAgent: req.headers['user-agent']
         })
       } catch (e) {
+        // ⚠️ Devuelve 400 con detalle para que el frontend no vea un 500 “genérico”
         return res.status(400).json({ msg: e.message })
       }
     }
 
-    // Modelo directo (compatibilidad). Si te llega este campo, regístralo con auditoría mínima.
+    // Cambio directo de estado_Emprendedor (compatibilidad)
     if (estado_Emprendedor) {
       const vals = ['Activo', 'Advertencia1','Advertencia2','Advertencia3', 'Suspendido']
       if (!vals.includes(estado_Emprendedor)) {
         return res.status(400).json({ msg: `estado_Emprendedor inválido. Permitidos: ${vals.join(', ')}` })
       }
-      // Normalizamos a estado UI equivalente
       const estadoUICompat = (estado_Emprendedor === 'Activo') ? 'Correcto' : estado_Emprendedor
       const motivoCompat = req.body.motivo || 'Cambio directo de estado_Emprendedor'
-      cliente.cambiarEstado({
-        estadoUI: estadoUICompat,
-        motivo: motivoCompat,
-        adminId,
-        adminNombre,
-        adminEmail,
-        ip: req.ip,
-        userAgent: req.headers['user-agent']
-      })
+      try {
+        cliente.cambiarEstado({
+          estadoUI: estadoUICompat,
+          motivo: motivoCompat,
+          adminId,
+          adminNombre,
+          adminEmail,
+          ip: req.ip,
+          userAgent: req.headers['user-agent']
+        })
+      } catch (e) {
+        return res.status(400).json({ msg: e.message })
+      }
     }
 
     if (typeof status === 'boolean') {
-      // Guardamos coherencia, pero NO sobreescribimos la regla de negocio si el estado es Suspendido/Activo
       cliente.status = status
     }
 
     const actualizado = await cliente.save()
     res.status(200).json(actualizado)
   } catch (error) {
-    res.status(500).json({ msg: 'Error al actualizar cliente' })
+    // 👇 Incluir detalle para depurar
+    res.status(500).json({ msg: 'Error al actualizar cliente', error: error.message })
   }
 }
 
@@ -311,7 +321,7 @@ const eliminarCliente = async (req, res) => {
     await cliente.deleteOne()
     res.status(200).json({ msg: 'Cliente eliminado correctamente' })
   } catch (error) {
-    res.status(500).json({ msg: 'Error al eliminar cliente' })
+    res.status(500).json({ msg: 'Error al eliminar cliente', error: error.message })
   }
 }
 
@@ -336,7 +346,7 @@ const actualizarPassword = async (req, res) => {
     await clienteBDD.save()
     res.status(200).json({ msg: 'Password actualizado correctamente' })
   } catch (error) {
-    res.status(500).json({ msg: 'Error al actualizar el password' })
+    res.status(500).json({ msg: 'Error al actualizar el password', error: error.message })
   }
 }
 
@@ -396,8 +406,8 @@ const actualizarFotoPerfil = async (req, res) => {
       try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {}
     }
 
-    clienteBDD.foto         = req.file.path     // secure_url
-    clienteBDD.fotoPublicId = req.file.filename // public_id
+    clienteBDD.foto         = req.file.path
+    clienteBDD.fotoPublicId = req.file.filename
 
     await clienteBDD.save()
 
@@ -435,7 +445,7 @@ const eliminarFotoPerfil = async (req, res) => {
 }
 
 /* ============================
-   Estado por ID (UI → Modelo) + auditoría embebida
+   Estado por ID (UI → Modelo)
 ============================ */
 const ESTADOS_UI = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
 
@@ -461,12 +471,11 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    // Admin que ejecuta (de tu middleware)
+    // Admin ejecutor (de tu middleware JWT)
     const adminId     = req.adminBDD?._id || null
     const adminNombre = req.adminBDD ? `${req.adminBDD.nombre} ${req.adminBDD.apellido || ''}`.trim() : null
     const adminEmail  = req.adminBDD?.email || null
 
-    // Aplica cambio + guarda evento embebido (con snapshots)
     cliente.cambiarEstado({
       estadoUI: nuevoEstadoUI,
       motivo,
@@ -478,9 +487,14 @@ const actualizarEstadoClienteById = async (req, res) => {
       metadata: metadata ?? null
     })
 
-    // Suspensión temporal opcional
+    // Suspensión temporal opcional (validada)
     if (nuevoEstadoUI === 'Suspendido' && suspendidoHasta) {
+      if (!isValidDateValue(suspendidoHasta)) {
+        return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 o un datetime-local válido.' })
+      }
       cliente.suspendidoHasta = new Date(suspendidoHasta)
+    } else {
+      cliente.suspendidoHasta = null
     }
 
     await cliente.save()
@@ -493,12 +507,13 @@ const actualizarEstadoClienteById = async (req, res) => {
       ultimaAdvertenciaAt: cliente.ultimaAdvertenciaAt
     })
   } catch (error) {
-    return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
+    const code = (error.name === 'ValidationError') ? 400 : 500
+    return res.status(code).json({ msg: 'Error al actualizar el estado', error: error.message })
   }
 }
 
 /* ============================
-   Listar auditoría embebida (paginado simple)
+   Listar auditoría embebida
 ============================ */
 const listarAuditoriaCliente = async (req, res) => {
   const { id } = req.params
@@ -521,15 +536,25 @@ const listarAuditoriaCliente = async (req, res) => {
   const total = cliente.advertencias.length
 
   // Orden inverso (más recientes primero)
-  const ordered = [...cliente.advertencias].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+  const ordered = [...cliente.advertencias].sort((a, b) => {
+    const fa = a?.fecha ? new Date(a.fecha) : objectIdToDate(a?._id)
+    const fb = b?.fecha ? new Date(b.fecha) : objectIdToDate(b?._id)
+    return (fb?.getTime() || 0) - (fa?.getTime() || 0)
+  })
+
   const start = (page - 1) * limit
   let items = ordered.slice(start, start + limit)
 
-  // Fallback: si algún evento antiguo no tiene snapshot, rellena desde populate (si existe)
+  // Fallbacks de snapshot y fecha segura
   items = items.map((a) => {
     const fullName = a.creadoPor ? `${a.creadoPor.nombre || ''} ${a.creadoPor.apellido || ''}`.trim() : null
+    const fechaOk =
+      (a?.fecha && !isNaN(new Date(a.fecha))) ? a.fecha :
+      (a?._id ? objectIdToDate(a._id) : null)
+
     return {
       ...a,
+      fecha: fechaOk,
       creadoPorNombre: a.creadoPorNombre ?? (fullName || null),
       creadoPorEmail:  a.creadoPorEmail  ?? (a.creadoPor?.email || null)
     }
