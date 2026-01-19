@@ -35,32 +35,33 @@ function objectIdToDate(oid) {
 
 /**
  * Acepta:
- * - undefined / no enviado -> {has:false, date:null} (no tocar en backend)
- * - null / 'null' / ''     -> {has:false, date:null} (dejar en null)
- * - number epoch           -> {has:true, date:Date}
- * - Date                   -> {has:true, date:Date}
- * - string ISO con o sin offset ('Z' o '-05:00') o 'YYYY-MM-DDTHH:mm' (local) -> {has:true, date:Date|null}
- * Si string inválido -> {has:true, date:null} (para forzar 400 arriba)
+ * - undefined / no enviado         -> { has:false, date:null }  (no tocar)
+ * - null / 'null' / '' / 'undefined' -> { has:false, date:null } (limpiar)
+ * - number epoch / Date            -> { has:true, date:Date }
+ * - string ISO con/sin offset o 'YYYY-MM-DDTHH:mm' (datetime-local) -> { has:true, date:Date|null}
+ * Si string inválido -> { has:true, date:null } (forzará 400 caller si has==true y date==null)
  */
 function parseOptionalUntil(val) {
   if (val === undefined) return { has: false, date: null }
   if (val === null) return { has: false, date: null }
 
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase()
+    if (!s || s === 'null' || s === 'undefined') return { has: false, date: null }
+    // 'YYYY-MM-DDTHH:mm' o ISO con/ sin offset funcionan con new Date()
+    const d = new Date(val)
+    return isNaN(d.getTime()) ? { has: true, date: null } : { has: true, date: d }
+  }
+
   if (typeof val === 'number') {
     const d = new Date(val)
     return isNaN(d.getTime()) ? { has: true, date: null } : { has: true, date: d }
   }
+
   if (val instanceof Date) {
     return isNaN(val.getTime()) ? { has: true, date: null } : { has: true, date: val }
   }
-  if (typeof val === 'string') {
-    const s = val.trim().toLowerCase()
-    if (!s || s === 'null' || s === 'undefined') return { has: false, date: null }
-    // Soportar 'YYYY-MM-DDTHH:mm' (datetime-local) y variantes
-    // new Date() tratará 'YYYY-MM-DDTHH:mm' como local
-    const d = new Date(val)
-    return isNaN(d.getTime()) ? { has: true, date: null } : { has: true, date: d }
-  }
+
   return { has: true, date: null }
 }
 
@@ -82,6 +83,7 @@ const registro = async (req, res) => {
   await nuevoCliente.save()
   res.status(200).json({ msg: 'Revisa tu correo electrónico para confirmar tu cuenta' })
 }
+
 const confirmarMail = async (req, res) => {
   const { token } = req.params
   const clienteBDD = await Cliente.findOne({ token })
@@ -91,6 +93,7 @@ const confirmarMail = async (req, res) => {
   await clienteBDD.save()
   res.status(200).json({ msg: 'Cuenta confirmada correctamente' })
 }
+
 const recuperarPassword = async (req, res) => {
   const { email } = req.body
   if (!email || String(email).trim() === '') return res.status(400).json({ msg: 'Debes llenar todos los campos' })
@@ -102,12 +105,14 @@ const recuperarPassword = async (req, res) => {
   await clienteBDD.save()
   res.status(200).json({ msg: 'Revisa tu correo electrónico para reestablecer tu cuenta' })
 }
+
 const comprobarTokenPasword = async (req, res) => {
   const { token } = req.params
   const clienteBDD = await Cliente.findOne({ token })
   if (clienteBDD?.token !== token) return res.status(404).json({ msg: 'No se puede validar la cuenta' })
   res.status(200).json({ msg: 'Token confirmado, ya puedes crear tu nuevo password' })
 }
+
 const crearNuevoPassword = async (req, res) => {
   const { password, confirmpassword } = req.body
   if (!password || !confirmpassword) return res.status(400).json({ msg: 'Debes llenar todos los campos' })
@@ -124,6 +129,7 @@ const crearNuevoPassword = async (req, res) => {
 const login = async (req, res) => {
   const { email, password } = req.body
   if (!email || !password) return res.status(400).json({ msg: 'Debes llenar todos los campos' })
+
   const clienteBDD = await Cliente.findOne({ email }).select('-__v -token -updatedAt -createdAt')
   if (!clienteBDD) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
   if (!clienteBDD.confirmEmail) return res.status(403).json({ msg: 'Debe verificar su cuenta' })
@@ -143,6 +149,7 @@ const login = async (req, res) => {
     const e = clienteBDD.estado_Emprendedor
     estadoUI = (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)) ? e : 'Correcto'
   }
+
   if (estadoUI === 'Suspendido') {
     return res.status(403).json({
       msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.',
@@ -150,7 +157,10 @@ const login = async (req, res) => {
     })
   }
 
-  const ultima = (clienteBDD.advertencias?.length || 0) > 0 ? clienteBDD.advertencias[clienteBDD.advertencias.length - 1] : null
+  const ultima = (clienteBDD.advertencias?.length || 0) > 0
+    ? clienteBDD.advertencias[clienteBDD.advertencias.length - 1]
+    : null
+
   const token = crearTokenJWT(clienteBDD._id, clienteBDD.rol)
 
   res.status(200).json({
@@ -172,7 +182,6 @@ const verClientes = async (req, res) => {
         await c.save()
       }
     }
-    // Volvemos a leer en lean para enviar JSON plano y evitar problemas de render
     const clientes = await Cliente.find().lean()
 
     const decorados = clientes.map((c) => {
@@ -183,7 +192,9 @@ const verClientes = async (req, res) => {
         estadoUI = (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)) ? e : 'Correcto'
       }
       const ultima = (c.advertencias?.length || 0) > 0 ? c.advertencias[c.advertencias.length - 1] : null
-      const ultimaFecha = (ultima?.fecha && !isNaN(new Date(ultima.fecha))) ? ultima.fecha : (ultima?._id ? objectIdToDate(ultima._id) : null)
+      const ultimaFecha = (ultima?.fecha && !isNaN(new Date(ultima.fecha)))
+        ? ultima.fecha
+        : (ultima?._id ? objectIdToDate(ultima._id) : null)
 
       return {
         ...c,
@@ -207,7 +218,12 @@ const actualizarCliente = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    const { nombre, apellido, email, password, telefono, estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status } = req.body
+    const {
+      nombre, apellido, email, password, telefono,
+      estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status
+    } = req.body
+
+    // ⚠️ Esta ruta NO cambia estado/suspensión
     if ([estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status].some(v => v !== undefined)) {
       return res.status(403).json({ msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id.' })
     }
@@ -238,17 +254,20 @@ const eliminarCliente = async (req, res) => {
   }
 }
 
-/* === perfil/password/foto (igual) === */
+/* === perfil/password/foto === */
 const perfil = (req, res) => {
   const { token, confirmEmail, createdAt, updatedAt, __v, password, ...datosPerfil } = req.clienteBDD
   res.status(200).json(datosPerfil)
 }
+
 const actualizarPassword = async (req, res) => {
   try {
     const clienteBDD = await Cliente.findById(req.clienteBDD._id)
     if (!clienteBDD) return res.status(404).json({ msg: 'No existe el cliente' })
+
     const ok = await clienteBDD.matchPassword(req.body.passwordactual)
     if (!ok) return res.status(400).json({ msg: 'El password actual no es correcto' })
+
     clienteBDD.password = await clienteBDD.encrypPassword(req.body.passwordnuevo)
     await clienteBDD.save()
     res.status(200).json({ msg: 'Password actualizado correctamente' })
@@ -256,6 +275,7 @@ const actualizarPassword = async (req, res) => {
     res.status(500).json({ msg: 'Error al actualizar el password', error: error.message })
   }
 }
+
 const actualizarPerfil = async (req, res) => {
   const { id } = req.params
   const { nombre, apellido, telefono, email } = req.body
@@ -266,10 +286,12 @@ const actualizarPerfil = async (req, res) => {
 
   const clienteBDD = await Cliente.findById(id)
   if (!clienteBDD) return res.status(404).json({ msg: `No existe el cliente con ID ${id}` })
+
   if (clienteBDD.email !== email) {
     const clienteBDDMail = await Cliente.findOne({ email })
     if (clienteBDDMail) return res.status(400).json({ msg: 'El email ya se encuentra registrado' })
   }
+
   clienteBDD.nombre   = nombre
   clienteBDD.apellido = apellido
   clienteBDD.telefono = telefono
@@ -277,14 +299,17 @@ const actualizarPerfil = async (req, res) => {
   await clienteBDD.save()
   res.status(200).json(clienteBDD)
 }
+
 const actualizarFotoPerfil = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).json({ msg: 'ID no válido' })
   const clienteBDD = await Cliente.findById(id)
   if (!clienteBDD) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
   try {
     if (!req.file?.path) return res.status(400).json({ msg: 'Debes enviar un archivo en el campo "foto"' })
-    if (clienteBDD.fotoPublicId) { try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {}
+    if (clienteBDD.fotoPublicId) {
+      try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {}
     }
     clienteBDD.foto         = req.file.path
     clienteBDD.fotoPublicId = req.file.filename
@@ -295,11 +320,13 @@ const actualizarFotoPerfil = async (req, res) => {
     res.status(500).json({ msg: 'Error al actualizar foto de perfil', error: error.message })
   }
 }
+
 const eliminarFotoPerfil = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).json({ msg: 'ID no válido' })
   const clienteBDD = await Cliente.findById(id)
   if (!clienteBDD) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
   try {
     if (clienteBDD.fotoPublicId) { try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {} }
     clienteBDD.foto = null
@@ -314,12 +341,15 @@ const eliminarFotoPerfil = async (req, res) => {
 
 /* === estado (SIN middleware, según tu pedido) === */
 const ESTADOS_UI = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
+
 const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).json({ msg: 'El ID no es válido' })
 
+  // Permitimos estado desde 'estado' o 'estado_Cliente'
   const { estado, estado_Cliente, motivo, suspendidoHasta, metadata } = req.body
-  const nuevoEstadoUI = (estado ?? estado_Cliente ?? '').trim()
+  const nuevoEstadoUI = String((estado ?? estado_Cliente ?? '')).trim()
+
   if (!nuevoEstadoUI) return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
   if (!ESTADOS_UI.includes(nuevoEstadoUI)) return res.status(400).json({ msg: `Estado inválido. Permitidos: ${ESTADOS_UI.join(', ')}` })
   if (!motivo || !String(motivo).trim()) return res.status(400).json({ msg: 'Debes enviar "motivo"' })
@@ -338,7 +368,9 @@ const actualizarEstadoClienteById = async (req, res) => {
 
     if (nuevoEstadoUI === 'Suspendido') {
       const { has, date } = parseOptionalUntil(suspendidoHasta)
-      if (has && !date) return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 con offset, epoch, o datetime-local válido.' })
+      if (has && !date) {
+        return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO (con o sin offset), datetime-local, Date o epoch.' })
+      }
       cliente.suspendidoHasta = has ? date : null
     } else {
       cliente.suspendidoHasta = null
@@ -371,11 +403,9 @@ const listarAuditoriaCliente = async (req, res) => {
   if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
   const total = cliente.advertencias.length
-  const ordered = [...cliente.advertencias].sort((a,b) => {
-    const fa = new Date(a.fecha).getTime() || 0
-    const fb = new Date(b.fecha).getTime() || 0
-    return fb - fa
-  })
+  const ordered = [...cliente.advertencias].sort((a,b) =>
+    (new Date(b.fecha).getTime() || 0) - (new Date(a.fecha).getTime() || 0)
+  )
   const items = ordered.slice((page-1)*limit, (page-1)*limit + limit).map(a => ({
     ...a,
     creadoPorNombre: a.creadoPorNombre ?? (a.creadoPor ? `${a.creadoPor.nombre || ''} ${a.creadoPor.apellido || ''}`.trim() : null),
