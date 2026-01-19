@@ -5,7 +5,8 @@ import {
   registro, confirmarMail, recuperarPassword, comprobarTokenPasword, crearNuevoPassword,
   login, verClientes, actualizarCliente, eliminarCliente, perfil, actualizarPassword,
   actualizarPerfil, actualizarEstadoClienteById, actualizarFotoPerfil, eliminarFotoPerfil,
-  listarAuditoriaCliente
+  listarAuditoriaCliente,
+  advertirClienteById   // <-- NUEVO
 } from '../controllers/cliente_controllers.js'
 import { verificarTokenJWT } from '../middleware/JWT.js'
 import multer from 'multer'
@@ -44,10 +45,13 @@ router.put('/cliente/actualizarpassword/:id', verificarTokenJWT, actualizarPassw
 router.put('/cliente/foto/:id', verificarTokenJWT, uploadClienteFoto.single('foto'), actualizarFotoPerfil)
 router.delete('/cliente/foto/:id', verificarTokenJWT, eliminarFotoPerfil)
 
-// Estado (SIN middleware, según tu requerimiento)
+// Estado (SIN middleware)
 router.put('/estado/:id', actualizarEstadoClienteById)
 
-// Auditoría (si quieres, protégela con JWT)
+// NUEVO: progresión de advertencia (motivo + suspensión opcional)
+router.put('/estado/:id/advertir', advertirClienteById)
+
+// Auditoría
 router.get('/estado/:id/auditoria', verificarTokenJWT, listarAuditoriaCliente)
 
 export default router
