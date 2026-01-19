@@ -50,3 +50,4 @@ router.put("/estado/:id", actualizarEstadoClienteById)
 router.get("/estado/:id/auditoria", verificarTokenJWT, listarAuditoriaCliente)
 
 export default router
+``
