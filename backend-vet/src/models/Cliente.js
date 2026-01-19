@@ -5,8 +5,6 @@ import bcrypt from 'bcryptjs'
 
 /**
  * Evento de advertencia/suspensión embebido (inmutable).
- * - creadoPor: _id del Administrador que ejecuta la acción (ref ajustado a 'Administrador')
- * - creadoPorNombre/Email: snapshot para evitar depender de populate y preservar histórico
  */
 const AdvertenciaSchema = new Schema({
   tipo: {
@@ -16,12 +14,13 @@ const AdvertenciaSchema = new Schema({
   },
   motivo:     { type: String, required: true, trim: true },
   creadoPor:  { type: Schema.Types.ObjectId, ref: 'Administrador', default: null },
+
   // snapshots del actor en el momento del evento
   creadoPorNombre: { type: String, default: null },
   creadoPorEmail:  { type: String, default: null },
 
   origen:     { type: String, enum: ['manual', 'sistema', 'automatizado'], default: 'manual' },
-  fecha:      { type: Date, default: Date.now },
+  fecha:      { type: Date, default: Date.now }, // 👈 siempre habrá fecha
   ip:         { type: String, default: null },
   userAgent:  { type: String, default: null },
   metadata:   { type: Schema.Types.Mixed, default: null }
@@ -33,7 +32,7 @@ const clienteSchema = new Schema({
   email:     { type: String, required: true, trim: true, unique: true, lowercase: true },
   password:  {
     type: String,
-    required: function () { return !this.idGoogle } // Requerido solo si NO hay Google OAuth
+    required: function () { return !this.idGoogle }
   },
   idGoogle:  { type: String, default: null },
 
@@ -54,18 +53,14 @@ const clienteSchema = new Schema({
     default: 'Activo'
   },
 
-  /* ============================
-     📸 Foto de perfil (Cloudinary)
-  ============================ */
+  // Cloudinary
   foto:         { type: String, default: null },
   fotoPublicId: { type: String, default: null },
 
-  /* ============================
-     🧾 Auditoría embebida
-  ============================ */
+  // Auditoría embebida
   advertencias:        { type: [AdvertenciaSchema], default: [] },
   ultimaAdvertenciaAt: { type: Date, default: null },
-  suspendidoHasta:     { type: Date, default: null } // opcional: suspensiones temporales
+  suspendidoHasta:     { type: Date, default: null }
 }, { timestamps: true })
 
 /* ============================
@@ -86,20 +81,21 @@ clienteSchema.methods.crearToken = function () {
 }
 
 /**
- * Método interno: registra un evento de cambio de estado + denormaliza estado actual.
+ * Evento + denormalización
  */
 clienteSchema.methods._registrarEventoEstado = function ({
   nuevoEstado,
   motivo,
   adminId = null,
-  adminNombre = null,  // 👈 snapshot
-  adminEmail  = null,  // 👈 snapshot
+  adminNombre = null,
+  adminEmail  = null,
   origen = 'manual',
   ip = null,
   userAgent = null,
   metadata = null
 }) {
-  // Evento inmutable
+  const ahora = new Date()
+
   this.advertencias.push({
     tipo: nuevoEstado === 'Activo' ? 'Correccion' : nuevoEstado,
     motivo,
@@ -110,28 +106,26 @@ clienteSchema.methods._registrarEventoEstado = function ({
     ip,
     userAgent,
     metadata,
-    fecha: new Date()
+    fecha: ahora
   })
 
-  // Denormalización
   this.estado_Emprendedor = nuevoEstado
-  this.ultimaAdvertenciaAt = new Date()
+  this.ultimaAdvertenciaAt = ahora
 
-  // Reglas de coherencia
   if (nuevoEstado === 'Suspendido') this.status = false
   if (nuevoEstado === 'Activo')     this.status = true
 }
 
 /**
- * Cambiar estado explícito recibido desde la UI/Admin.
+ * Cambiar estado explícito desde UI
  * estadoUI: 'Correcto' | 'Advertencia1' | 'Advertencia2' | 'Advertencia3' | 'Suspendido'
  */
 clienteSchema.methods.cambiarEstado = function ({
   estadoUI,
   motivo,
   adminId,
-  adminNombre,  // 👈
-  adminEmail,   // 👈
+  adminNombre,
+  adminEmail,
   ip,
   userAgent,
   metadata
@@ -140,10 +134,12 @@ clienteSchema.methods.cambiarEstado = function ({
   if (!PERMITIDOS.includes(estadoUI)) {
     throw new Error(`Estado UI inválido: ${estadoUI}`)
   }
-  const target = (estadoUI === 'Correcto') ? 'Activo' : estadoUI
   if (!motivo || !String(motivo).trim()) {
     throw new Error('El motivo es obligatorio')
   }
+
+  const target = (estadoUI === 'Correcto') ? 'Activo' : estadoUI
+
   this._registrarEventoEstado({
     nuevoEstado: target,
     motivo,
@@ -158,23 +154,24 @@ clienteSchema.methods.cambiarEstado = function ({
 }
 
 /**
- * Escalado automático de Advertencia1 -> 2 -> 3 -> Suspendido
+ * Escalado automático Advertencia1 -> 2 -> 3 -> Suspendido
  */
 clienteSchema.methods.aplicarAdvertencia = function ({
   motivo,
   adminId,
-  adminNombre,  // 👈
-  adminEmail,   // 👈
+  adminNombre,
+  adminEmail,
   ip,
   userAgent,
   metadata
 }) {
-  const count = this.advertencias.filter(a => a.tipo && a.tipo.startsWith('Advertencia')).length
-  const siguiente = Math.min(count + 1, 3)
-  const nuevoEstado = (siguiente >= 3) ? 'Suspendido' : `Advertencia${siguiente}`
   if (!motivo || !String(motivo).trim()) {
     throw new Error('El motivo es obligatorio')
   }
+  const count = this.advertencias.filter(a => a.tipo && a.tipo.startsWith('Advertencia')).length
+  const siguiente = Math.min(count + 1, 3)
+  const nuevoEstado = (siguiente >= 3) ? 'Suspendido' : `Advertencia${siguiente}`
+
   this._registrarEventoEstado({
     nuevoEstado,
     motivo,
@@ -188,20 +185,24 @@ clienteSchema.methods.aplicarAdvertencia = function ({
   return nuevoEstado
 }
 
-/**
- * Compatibilidad: mantiene tu API previa pero ahora delega en cambiarEstado.
- */
 clienteSchema.methods.aplicarEstadoUI = function (estadoUI) {
   return this.cambiarEstado({ estadoUI, motivo: 'Cambio desde UI', adminId: null, origen: 'manual' })
 }
 
 /**
- * Coherencia automática antes de guardar:
- * - 'Suspendido' => status=false
- * - 'Activo' con status=false => se fuerza status=true
- * - Levantar suspensión temporal si ya expiró
+ * Coherencia + Backfill de fechas en auditoría
  */
 clienteSchema.pre('save', function (next) {
+  // Backfill: asegurar 'fecha' en eventos antiguos
+  if (Array.isArray(this.advertencias)) {
+    this.advertencias = this.advertencias.map(a => {
+      if (!a.fecha || isNaN(new Date(a.fecha))) {
+        a.fecha = new Date()
+      }
+      return a
+    })
+  }
+
   if (this.estado_Emprendedor === 'Suspendido') {
     this.status = false
   }
@@ -209,7 +210,7 @@ clienteSchema.pre('save', function (next) {
     this.status = true
   }
 
-  // Auto-reactivar si expiró una suspensión temporal
+  // Auto-reactivar si expiró suspensión temporal
   if (this.suspendidoHasta && new Date() > this.suspendidoHasta && this.estado_Emprendedor === 'Suspendido') {
     this._registrarEventoEstado({
       nuevoEstado: 'Activo',
