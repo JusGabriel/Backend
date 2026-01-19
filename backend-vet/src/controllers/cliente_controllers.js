@@ -139,7 +139,7 @@ const crearNuevoPassword = async (req, res) => {
 }
 
 /* ============================
-   Login
+   Login (reforzado con auto-reactivación si la fecha venció)
 ============================ */
 const login = async (req, res) => {
   const { email, password } = req.body
@@ -150,6 +150,17 @@ const login = async (req, res) => {
   const clienteBDD = await Cliente.findOne({ email }).select('-__v -token -updatedAt -createdAt')
   if (!clienteBDD) return res.status(404).json({ msg: 'El usuario no se encuentra registrado' })
   if (!clienteBDD.confirmEmail) return res.status(403).json({ msg: 'Debe verificar su cuenta' })
+
+  // Auto-reactivar si corresponde (disparando pre('save'))
+  if (clienteBDD.suspendidoHasta && new Date() > clienteBDD.suspendidoHasta && clienteBDD.estado_Emprendedor === 'Suspendido') {
+    clienteBDD._registrarEventoEstado({
+      nuevoEstado: 'Activo',
+      motivo: 'Fin de suspensión automática',
+      origen: 'sistema'
+    })
+    clienteBDD.suspendidoHasta = null
+    await clienteBDD.save()
+  }
 
   const ok = await clienteBDD.matchPassword(password)
   if (!ok) return res.status(401).json({ msg: 'El password no es el correcto' })
@@ -200,12 +211,27 @@ const login = async (req, res) => {
 }
 
 /* ============================
-   Listado (decorado para UI)
+   Listado (decorado para UI) + auto-reactivación si venció
 ============================ */
 const verClientes = async (req, res) => {
   try {
-    const clientes = await Cliente.find().lean()
+    // Trae modelos (no lean) para poder ajustar si caducó la suspensión
+    const clientes = await Cliente.find()
 
+    // Reforzar reactivación vencida (por si no hubo save reciente)
+    for (const c of clientes) {
+      if (c.suspendidoHasta && new Date() > c.suspendidoHasta && c.estado_Emprendedor === 'Suspendido') {
+        c._registrarEventoEstado({
+          nuevoEstado: 'Activo',
+          motivo: 'Fin de suspensión automática',
+          origen: 'sistema'
+        })
+        c.suspendidoHasta = null
+        await c.save()
+      }
+    }
+
+    // Para UI
     const decorados = clientes.map((c) => {
       let estadoUI = 'Correcto'
       if (c.status === false) {
@@ -224,7 +250,7 @@ const verClientes = async (req, res) => {
         (ultima?._id ? objectIdToDate(ultima._id) : null)
 
       return {
-        ...c,
+        ...c.toObject(),
         estado: estadoUI,
         estado_Cliente: estadoUI,
         ultimaAdvertencia: ultima ? {
@@ -267,7 +293,7 @@ const actualizarCliente = async (req, res) => {
       status !== undefined
     ) {
       return res.status(403).json({
-        msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id con rol Administrador.'
+        msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id.'
       })
     }
 
@@ -426,7 +452,7 @@ const eliminarFotoPerfil = async (req, res) => {
 }
 
 /* ============================
-   Estado por ID (UI → Modelo) — SOLO ADMIN
+   Estado por ID (UI → Modelo) — SIN MIDDLEWARE
 ============================ */
 const ESTADOS_UI = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
 
@@ -452,17 +478,13 @@ const actualizarEstadoClienteById = async (req, res) => {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
-    // Admin ejecutor (inyectado por middleware JWT + requireRole)
-    const adminId     = req.adminBDD?._id || null
-    const adminNombre = req.adminBDD ? `${req.adminBDD.nombre} ${req.adminBDD.apellido || ''}`.trim() : null
-    const adminEmail  = req.adminBDD?.email || null
-
+    // Actor en null (no dependemos de token)
     cliente.cambiarEstado({
       estadoUI: nuevoEstadoUI,
       motivo: motivo.trim(),
-      adminId,
-      adminNombre,
-      adminEmail,
+      adminId: null,
+      adminNombre: null,
+      adminEmail: null,
       ip: req.ip,
       userAgent: req.headers['user-agent'],
       metadata: metadata ?? null
