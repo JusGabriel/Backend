@@ -48,7 +48,6 @@ function parseOptionalUntil(val) {
   if (typeof val === 'string') {
     const s = val.trim().toLowerCase()
     if (!s || s === 'null' || s === 'undefined') return { has: false, date: null }
-    // 'YYYY-MM-DDTHH:mm' o ISO con/ sin offset funcionan con new Date()
     const d = new Date(val)
     return isNaN(d.getTime()) ? { has: true, date: null } : { has: true, date: d }
   }
@@ -223,7 +222,6 @@ const actualizarCliente = async (req, res) => {
       estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status
     } = req.body
 
-    // ⚠️ Esta ruta NO cambia estado/suspensión
     if ([estado, estado_Cliente, estado_Emprendedor, suspendidoHasta, motivo, status].some(v => v !== undefined)) {
       return res.status(403).json({ msg: 'Cambio de estado/suspensión no permitido en esta ruta. Usa /clientes/estado/:id.' })
     }
@@ -342,6 +340,46 @@ const eliminarFotoPerfil = async (req, res) => {
 /* === estado (SIN middleware, según tu pedido) === */
 const ESTADOS_UI = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
 
+/* Saneo defensivo extra (además del pre('validate') del modelo) */
+function fixDateValue(val) {
+  if (!val) return val
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val
+  if (typeof val === 'object' && val.$date) {
+    const d = new Date(val.$date)
+    return isNaN(d.getTime()) ? null : d
+  }
+  if (typeof val === 'string' || typeof val === 'number') {
+    const d = new Date(val)
+    return isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+function sanitizeClienteDates(cliente) {
+  try {
+    if (cliente.createdAt) {
+      const d = fixDateValue(cliente.createdAt); if (d) cliente.createdAt = d
+    }
+    if (cliente.updatedAt) {
+      const d = fixDateValue(cliente.updatedAt); if (d) cliente.updatedAt = d
+    }
+    if (cliente.ultimaAdvertenciaAt !== undefined && cliente.ultimaAdvertenciaAt !== null) {
+      const d = fixDateValue(cliente.ultimaAdvertenciaAt); cliente.ultimaAdvertenciaAt = d || null
+    }
+    if (cliente.suspendidoHasta !== undefined && cliente.suspendidoHasta !== null) {
+      const d = fixDateValue(cliente.suspendidoHasta); cliente.suspendidoHasta = d || null
+    }
+    if (Array.isArray(cliente.advertencias)) {
+      cliente.advertencias = cliente.advertencias.map(a => {
+        if (!a) return a
+        if (a.fecha !== undefined && a.fecha !== null) {
+          const d = fixDateValue(a.fecha); a.fecha = d || new Date()
+        }
+        return a
+      })
+    }
+  } catch (_) {}
+}
+
 const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).json({ msg: 'El ID no es válido' })
@@ -357,6 +395,9 @@ const actualizarEstadoClienteById = async (req, res) => {
   try {
     const cliente = await Cliente.findById(id)
     if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
+    // 🔧 Saneo extra (por si existen valores Extended JSON en este doc)
+    sanitizeClienteDates(cliente)
 
     cliente.cambiarEstado({
       estadoUI: nuevoEstadoUI,
