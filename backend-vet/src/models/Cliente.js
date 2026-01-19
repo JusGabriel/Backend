@@ -58,17 +58,17 @@ clienteSchema.methods.crearToken = function () {
   return this.token
 }
 
-/* Lógica de Estados */
+/* Lógica de Estados y Auditoría */
 clienteSchema.methods._registrarEventoEstado = function ({
   nuevoEstado, motivo, adminId=null, adminNombre=null, adminEmail=null,
   origen='manual', ip=null, userAgent=null, metadata=null
 }) {
   const ahora = new Date()
   
-  // Mapeo: Si el admin lo pone como Activo, el log registra "Correccion" o "Reactivado"
+  // Si el nuevo estado es Activo, el log registra "Correccion" (manual) o "Reactivado" (sistema)
   let tipoEvento = nuevoEstado
   if (nuevoEstado === 'Activo') {
-    tipoEvento = (motivo.toLowerCase().includes('automática')) ? 'Reactivado' : 'Correccion'
+    tipoEvento = (origen === 'sistema' || motivo.toLowerCase().includes('automática')) ? 'Reactivado' : 'Correccion'
   }
 
   this.advertencias.push({
@@ -91,8 +91,8 @@ clienteSchema.methods._registrarEventoEstado = function ({
 clienteSchema.methods.cambiarEstado = function (datos) {
   const { estadoUI, motivo } = datos
   const PERMITIDOS = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
-  if (!PERMITIDOS.includes(estadoUI)) throw new Error(`Estado inválido: ${estadoUI}`)
-  if (!motivo?.trim()) throw new Error('El motivo es obligatorio')
+  if (!PERMITIDOS.includes(estadoUI)) throw new Error(`Estado UI inválido: ${estadoUI}`)
+  if (!motivo || !motivo.trim()) throw new Error('El motivo es obligatorio')
 
   const target = (estadoUI === 'Correcto') ? 'Activo' : estadoUI
   this._registrarEventoEstado({ ...datos, nuevoEstado: target })
@@ -100,12 +100,13 @@ clienteSchema.methods.cambiarEstado = function (datos) {
 }
 
 clienteSchema.methods.aplicarAdvertencia = function (datos) {
-  if (!datos.motivo?.trim()) throw new Error('El motivo es obligatorio')
+  if (!datos.motivo || !datos.motivo.trim()) throw new Error('El motivo es obligatorio')
 
   // BUSCAR ÚLTIMO RESET: Ignoramos advertencias previas a una corrección/reactivación
   const ultimoReset = [...this.advertencias].reverse().find(a => a.tipo === 'Correccion' || a.tipo === 'Reactivado')
   const fechaCorte = ultimoReset ? ultimoReset.fecha : new Date(0)
 
+  // Contamos solo los strikes desde el último perdón
   const count = this.advertencias.filter(a => 
     a.tipo.startsWith('Advertencia') && a.fecha > fechaCorte
   ).length
