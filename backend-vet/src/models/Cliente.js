@@ -3,21 +3,6 @@
 import { Schema, model } from 'mongoose'
 import bcrypt from 'bcryptjs'
 
-/* ---------- Helpers de fechas (normaliza Extended JSON { $date: ... } a Date) ---------- */
-function toDateSafe(val) {
-  if (!val) return val
-  if (val instanceof Date) return isNaN(val.getTime()) ? null : val
-  if (typeof val === 'object' && val.$date) {
-    const d = new Date(val.$date)
-    return isNaN(d.getTime()) ? null : d
-  }
-  if (typeof val === 'string' || typeof val === 'number') {
-    const d = new Date(val)
-    return isNaN(d.getTime()) ? null : d
-  }
-  return null
-}
-
 const AdvertenciaSchema = new Schema({
   tipo: {
     type: String,
@@ -61,45 +46,6 @@ const clienteSchema = new Schema({
   ultimaAdvertenciaAt: { type: Date, default: null },
   suspendidoHasta:     { type: Date, default: null }
 }, { timestamps: true })
-
-/* ---------- Saneo de fechas antes de validar (arregla { $date: ... }) ---------- */
-clienteSchema.pre('validate', function (next) {
-  try {
-    // timestamps de mongoose
-    if (this.createdAt) {
-      const d = toDateSafe(this.createdAt)
-      if (d) this.createdAt = d
-    }
-    if (this.updatedAt) {
-      const d = toDateSafe(this.updatedAt)
-      if (d) this.updatedAt = d
-    }
-
-    // campos de fecha del cliente
-    if (this.ultimaAdvertenciaAt !== undefined && this.ultimaAdvertenciaAt !== null) {
-      const d = toDateSafe(this.ultimaAdvertenciaAt)
-      this.ultimaAdvertenciaAt = d || null
-    }
-    if (this.suspendidoHasta !== undefined && this.suspendidoHasta !== null) {
-      const d = toDateSafe(this.suspendidoHasta)
-      this.suspendidoHasta = d || null
-    }
-
-    // fechas en subdocumentos advertencias
-    if (Array.isArray(this.advertencias)) {
-      this.advertencias = this.advertencias.map((a) => {
-        if (!a) return a
-        const copia = a
-        if (copia.fecha !== undefined && copia.fecha !== null) {
-          const d = toDateSafe(copia.fecha)
-          copia.fecha = d || new Date()
-        }
-        return copia
-      })
-    }
-  } catch (_) { /* no romper la validación por saneo */ }
-  next()
-})
 
 /* Métodos */
 clienteSchema.methods.encrypPassword = async function (password) {
@@ -179,6 +125,7 @@ clienteSchema.pre('save', function (next) {
   if (this.estado_Emprendedor === 'Suspendido') this.status = false
   if (this.estado_Emprendedor === 'Activo' && this.status === false) this.status = true
 
+  // Si ya venció la suspensión, reactivar automáticamente
   if (this.suspendidoHasta && new Date() > this.suspendidoHasta && this.estado_Emprendedor === 'Suspendido') {
     this._registrarEventoEstado({ nuevoEstado: 'Activo', motivo: 'Fin de suspensión automática', origen: 'sistema' })
     this.suspendidoHasta = null
@@ -187,4 +134,3 @@ clienteSchema.pre('save', function (next) {
 })
 
 export default model('Cliente', clienteSchema)
-``
