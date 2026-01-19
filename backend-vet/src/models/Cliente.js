@@ -61,8 +61,8 @@ clienteSchema.methods.crearToken = function () {
 }
 
 clienteSchema.methods._registrarEventoEstado = function ({
-  nuevoEstado, motivo, adminId=null, adminNombre=null, adminEmail=null,
-  origen='manual', ip=null, userAgent=null, metadata=null
+  nuevoEstado, motivo, adminId = null, adminNombre = null, adminEmail = null,
+  origen = 'manual', ip = null, userAgent = null, metadata = null
 }) {
   const ahora = new Date()
   this.advertencias.push({
@@ -84,7 +84,7 @@ clienteSchema.methods._registrarEventoEstado = function ({
 clienteSchema.methods.cambiarEstado = function ({
   estadoUI, motivo, adminId, adminNombre, adminEmail, ip, userAgent, metadata
 }) {
-  const PERMITIDOS = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
+  const PERMITIDOS = ['Correcto', 'Advertencia1', 'Advertencia2', 'Advertencia3', 'Suspendido']
   if (!PERMITIDOS.includes(estadoUI)) throw new Error(`Estado UI inválido: ${estadoUI}`)
   if (!motivo || !String(motivo).trim()) throw new Error('El motivo es obligatorio')
 
@@ -95,7 +95,7 @@ clienteSchema.methods.cambiarEstado = function ({
   return target
 }
 
-/* 🔧 FIX ÚNICO: progresión 1→2→3→Suspendido */
+/* 🔧 Progresión 1→2→3→Suspendido (histórica) */
 clienteSchema.methods.aplicarAdvertencia = function ({ motivo, adminId, adminNombre, adminEmail, ip, userAgent, metadata }) {
   if (!motivo || !String(motivo).trim()) throw new Error('El motivo es obligatorio')
 
