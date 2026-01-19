@@ -21,14 +21,12 @@ import {
 } from "../controllers/cliente_controllers.js"
 import { verificarTokenJWT } from '../middleware/JWT.js'
 
-// ⬇️ Multer + CloudinaryStorage (sin upload.js)
 import multer from 'multer'
 import { CloudinaryStorage } from 'multer-storage-cloudinary'
 import cloudinary from '../config/cloudinary.js'
 
 const router = Router()
 
-// Middleware simple de rol
 const requireRole = (...roles) => (req, res, next) => {
   const rol =
     req.adminBDD?.rol ||
@@ -42,7 +40,6 @@ const requireRole = (...roles) => (req, res, next) => {
   next()
 }
 
-// Storage para fotos de clientes
 const clienteFotoStorage = new CloudinaryStorage({
   cloudinary,
   params: (req, file) => ({
@@ -76,31 +73,26 @@ router.get("/perfil", verificarTokenJWT, perfil)
 router.put("/cliente/:id", verificarTokenJWT, actualizarPerfil)
 router.put("/cliente/actualizarpassword/:id", verificarTokenJWT, actualizarPassword)
 
-// 📸 Foto de perfil (solo archivo, Cloudinary)
+// Foto de perfil
 router.put(
   "/cliente/foto/:id",
   verificarTokenJWT,
   uploadClienteFoto.single('foto'),
   actualizarFotoPerfil
 )
-
 router.delete(
   "/cliente/foto/:id",
   verificarTokenJWT,
   eliminarFotoPerfil
 )
 
-// *** Editar estado del cliente por ID (con auditoría embebida) ***
-// Solo Administrador
+// Estado + auditoría (solo Administrador)
 router.put(
   "/estado/:id",
   verificarTokenJWT,
   requireRole('Administrador'),
   actualizarEstadoClienteById
 )
-
-// *** Consultar histórico de auditoría embebida ***
-// Solo Administrador
 router.get(
   "/estado/:id/auditoria",
   verificarTokenJWT,
