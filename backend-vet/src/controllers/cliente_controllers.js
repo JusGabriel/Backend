@@ -33,14 +33,6 @@ function objectIdToDate(oid) {
   return null
 }
 
-/**
- * Acepta:
- * - undefined / no enviado         -> { has:false, date:null }  (no tocar)
- * - null / 'null' / '' / 'undefined' -> { has:false, date:null } (limpiar)
- * - number epoch / Date            -> { has:true, date:Date }
- * - string ISO con/sin offset o 'YYYY-MM-DDTHH:mm' (datetime-local) -> { has:true, date:Date|null}
- * Si string inválido -> { has:true, date:null } (forzará 400 caller si has==true y date==null)
- */
 function parseOptionalUntil(val) {
   if (val === undefined) return { has: false, date: null }
   if (val === null) return { has: false, date: null }
@@ -170,19 +162,10 @@ const login = async (req, res) => {
   })
 }
 
-/* === listar: asegura reactivación vencida y devuelve objetos planos === */
+/* === listar (LECTURA PURA): NO GUARDA NADA para no romper el listado === */
 const verClientes = async (req, res) => {
   try {
-    const docs = await Cliente.find()
-    for (const c of docs) {
-      if (c.suspendidoHasta && new Date() > c.suspendidoHasta && c.estado_Emprendedor === 'Suspendido') {
-        c._registrarEventoEstado({ nuevoEstado: 'Activo', motivo: 'Fin de suspensión automática', origen: 'sistema' })
-        c.suspendidoHasta = null
-        await c.save()
-      }
-    }
-    const clientes = await Cliente.find().lean()
-
+    const clientes = await Cliente.find().lean() // <- solo lectura
     const decorados = clientes.map((c) => {
       let estadoUI = 'Correcto'
       if (c.status === false) estadoUI = 'Suspendido'
@@ -338,14 +321,13 @@ const eliminarFotoPerfil = async (req, res) => {
   }
 }
 
-/* === estado (SIN middleware, según tu requerimiento) === */
+/* === estado (SIN middleware) === */
 const ESTADOS_UI = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
 
 const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).json({ msg: 'El ID no es válido' })
 
-  // Permitimos estado desde 'estado' o 'estado_Cliente'
   const { estado, estado_Cliente, motivo, suspendidoHasta, metadata } = req.body
   const nuevoEstadoUI = String((estado ?? estado_Cliente ?? '')).trim()
 
@@ -476,5 +458,5 @@ export {
   login, verClientes, actualizarCliente, eliminarCliente, perfil, actualizarPassword,
   actualizarPerfil, actualizarEstadoClienteById, actualizarFotoPerfil, eliminarFotoPerfil,
   listarAuditoriaCliente,
-  advertirClienteById   // <-- NUEVO export
+  advertirClienteById
 }
