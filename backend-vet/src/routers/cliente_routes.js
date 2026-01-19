@@ -6,7 +6,7 @@ import {
   login, verClientes, actualizarCliente, eliminarCliente, perfil, actualizarPassword,
   actualizarPerfil, actualizarEstadoClienteById, actualizarFotoPerfil, eliminarFotoPerfil,
   listarAuditoriaCliente,
-  advertirClienteById   // <-- NUEVO
+  advertirClienteById
 } from '../controllers/cliente_controllers.js'
 import { verificarTokenJWT } from '../middleware/JWT.js'
 import multer from 'multer'
