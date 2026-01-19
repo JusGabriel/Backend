@@ -94,7 +94,7 @@ clienteSchema.methods.aplicarAdvertencia = function ({ motivo, adminId, adminNom
   return nuevoEstado
 }
 clienteSchema.methods.aplicarEstadoUI = function (estadoUI) {
-  return this.cambiarEstado({ estadoUI, motivo: 'Cambio desde UI', adminId: null, origen: 'manual' })
+  return this.cambiarEstado({ estadoUI, motivo: 'Cambio desde UI', adminId: null /* origen por defecto 'manual' */ })
 }
 
 /* Coherencia + auto-reactivar */
