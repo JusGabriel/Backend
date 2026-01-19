@@ -86,13 +86,11 @@ router.delete(
   eliminarFotoPerfil
 )
 
-// Estado + auditoría (solo Administrador)
-router.put(
-  "/estado/:id",
-  verificarTokenJWT,
-  requireRole('Administrador'),
-  actualizarEstadoClienteById
-)
+// Estado + auditoría
+// ⚠️ Cambio de estado SIN middleware (según tu requerimiento)
+router.put("/estado/:id", actualizarEstadoClienteById)
+
+// Auditoría puede quedar protegida (o abrirla si prefieres)
 router.get(
   "/estado/:id/auditoria",
   verificarTokenJWT,
