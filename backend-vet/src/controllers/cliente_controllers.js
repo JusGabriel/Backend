@@ -32,15 +32,36 @@ function objectIdToDate(oid) {
   }
   return null
 }
+
+/**
+ * Acepta:
+ * - undefined / no enviado -> {has:false, date:null} (no tocar en backend)
+ * - null / 'null' / ''     -> {has:false, date:null} (dejar en null)
+ * - number epoch           -> {has:true, date:Date}
+ * - Date                   -> {has:true, date:Date}
+ * - string ISO con o sin offset ('Z' o '-05:00') o 'YYYY-MM-DDTHH:mm' (local) -> {has:true, date:Date|null}
+ * Si string inválido -> {has:true, date:null} (para forzar 400 arriba)
+ */
 function parseOptionalUntil(val) {
-  if (val === null || val === undefined) return { has: false, date: null }
+  if (val === undefined) return { has: false, date: null }
+  if (val === null) return { has: false, date: null }
+
+  if (typeof val === 'number') {
+    const d = new Date(val)
+    return isNaN(d.getTime()) ? { has: true, date: null } : { has: true, date: d }
+  }
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? { has: true, date: null } : { has: true, date: val }
+  }
   if (typeof val === 'string') {
     const s = val.trim().toLowerCase()
     if (!s || s === 'null' || s === 'undefined') return { has: false, date: null }
+    // Soportar 'YYYY-MM-DDTHH:mm' (datetime-local) y variantes
+    // new Date() tratará 'YYYY-MM-DDTHH:mm' como local
+    const d = new Date(val)
+    return isNaN(d.getTime()) ? { has: true, date: null } : { has: true, date: d }
   }
-  const d = new Date(val)
-  if (isNaN(d.getTime())) return { has: true, date: null }
-  return { has: true, date: d }
+  return { has: true, date: null }
 }
 
 /* === registro / confirmar / recuperar === */
@@ -53,6 +74,7 @@ const registro = async (req, res) => {
   const e2 = validarTelefono(telefono); if (e2) return res.status(400).json({ msg: e2 })
   const existe = await Cliente.findOne({ email })
   if (existe) return res.status(400).json({ msg: 'Este email ya está registrado' })
+
   const nuevoCliente = new Cliente(req.body)
   nuevoCliente.password = await nuevoCliente.encrypPassword(password)
   const token = nuevoCliente.crearToken()
@@ -122,7 +144,10 @@ const login = async (req, res) => {
     estadoUI = (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(e)) ? e : 'Correcto'
   }
   if (estadoUI === 'Suspendido') {
-    return res.status(403).json({ msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.', estadoUI, estado_Emprendedor: clienteBDD.estado_Emprendedor, status: clienteBDD.status })
+    return res.status(403).json({
+      msg: 'Tu cuenta está suspendida. Contacta soporte para reactivación.',
+      estadoUI, estado_Emprendedor: clienteBDD.estado_Emprendedor, status: clienteBDD.status
+    })
   }
 
   const ultima = (clienteBDD.advertencias?.length || 0) > 0 ? clienteBDD.advertencias[clienteBDD.advertencias.length - 1] : null
@@ -162,7 +187,7 @@ const verClientes = async (req, res) => {
 
       return {
         ...c,
-        _id: String(c._id),                 // 👈 aseguramos _id como string
+        _id: String(c._id),
         estado: estadoUI,
         estado_Cliente: estadoUI,
         ultimaAdvertencia: ultima ? { tipo: ultima.tipo, motivo: ultima.motivo, fecha: ultimaFecha } : null
@@ -259,7 +284,8 @@ const actualizarFotoPerfil = async (req, res) => {
   if (!clienteBDD) return res.status(404).json({ msg: 'Cliente no encontrado' })
   try {
     if (!req.file?.path) return res.status(400).json({ msg: 'Debes enviar un archivo en el campo "foto"' })
-    if (clienteBDD.fotoPublicId) { try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {} }
+    if (clienteBDD.fotoPublicId) { try { await cloudinary.uploader.destroy(clienteBDD.fotoPublicId) } catch {}
+    }
     clienteBDD.foto         = req.file.path
     clienteBDD.fotoPublicId = req.file.filename
     await clienteBDD.save()
@@ -291,6 +317,7 @@ const ESTADOS_UI = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Sus
 const actualizarEstadoClienteById = async (req, res) => {
   const { id } = req.params
   if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).json({ msg: 'El ID no es válido' })
+
   const { estado, estado_Cliente, motivo, suspendidoHasta, metadata } = req.body
   const nuevoEstadoUI = (estado ?? estado_Cliente ?? '').trim()
   if (!nuevoEstadoUI) return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
@@ -311,7 +338,7 @@ const actualizarEstadoClienteById = async (req, res) => {
 
     if (nuevoEstadoUI === 'Suspendido') {
       const { has, date } = parseOptionalUntil(suspendidoHasta)
-      if (has && !date) return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 o datetime-local válido.' })
+      if (has && !date) return res.status(400).json({ msg: 'suspendidoHasta inválido. Usa ISO 8601 con offset, epoch, o datetime-local válido.' })
       cliente.suspendidoHasta = has ? date : null
     } else {
       cliente.suspendidoHasta = null
@@ -323,7 +350,8 @@ const actualizarEstadoClienteById = async (req, res) => {
       estadoUI: nuevoEstadoUI,
       estado_Emprendedor: cliente.estado_Emprendedor,
       status: cliente.status,
-      ultimaAdvertenciaAt: cliente.ultimaAdvertenciaAt
+      ultimaAdvertenciaAt: cliente.ultimaAdvertenciaAt,
+      suspendidoHasta: cliente.suspendidoHasta
     })
   } catch (error) {
     const code = (error.name === 'ValidationError') ? 400 : 500
@@ -343,7 +371,11 @@ const listarAuditoriaCliente = async (req, res) => {
   if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
 
   const total = cliente.advertencias.length
-  const ordered = [...cliente.advertencias].sort((a,b) => (new Date(b.fecha).getTime() || 0) - (new Date(a.fecha).getTime() || 0))
+  const ordered = [...cliente.advertencias].sort((a,b) => {
+    const fa = new Date(a.fecha).getTime() || 0
+    const fb = new Date(b.fecha).getTime() || 0
+    return fb - fa
+  })
   const items = ordered.slice((page-1)*limit, (page-1)*limit + limit).map(a => ({
     ...a,
     creadoPorNombre: a.creadoPorNombre ?? (a.creadoPor ? `${a.creadoPor.nombre || ''} ${a.creadoPor.apellido || ''}`.trim() : null),
