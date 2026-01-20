@@ -5,7 +5,8 @@ dotenv.config();
 async function limpiarClientes() {
   const client = new MongoClient(process.env.MONGO_URL);
   await client.connect();
-  const db = client.db("test");
+
+  const db = client.db("test"); // o tu DB real
   const clientes = db.collection("clientes");
 
   const res = await clientes.updateMany(
