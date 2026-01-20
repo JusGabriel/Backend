@@ -2,33 +2,19 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 dotenv.config();
 
-async function limpiarEstadoEmprendedorEnClientes() {
-  const uri = process.env.MONGODB_URI_LOCAL;
-  if (!uri) {
-    console.error("No se encontró MONGODB_URI_LOCAL");
-    process.exit(1);
-  }
+async function limpiarClientes() {
+  const client = new MongoClient(process.env.MONGO_URL);
+  await client.connect();
+  const db = client.db("test");
+  const clientes = db.collection("clientes");
 
-  const client = new MongoClient(uri);
+  const res = await clientes.updateMany(
+    { estado_Emprendedor: { $exists: true } },
+    { $unset: { estado_Emprendedor: "", advertencias: "", ultimaAdvertenciaAt: "" } }
+  );
 
-  try {
-    await client.connect();
-    const db = client.db("test"); // cambia si tu BD es otra
-    const clientes = db.collection("clientes");
-
-    const result = await clientes.updateMany(
-      { estado_Emprendedor: { $exists: true } },
-      {
-        $unset: { estado_Emprendedor: "" }
-      }
-    );
-
-    console.log(`Clientes limpiados: ${result.modifiedCount}`);
-  } catch (error) {
-    console.error("Error limpiando clientes:", error);
-  } finally {
-    await client.close();
-  }
+  console.log("Clientes corregidos:", res.modifiedCount);
+  await client.close();
 }
 
-limpiarEstadoEmprendedorEnClientes();
+limpiarClientes();
