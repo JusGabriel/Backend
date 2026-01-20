@@ -2,10 +2,10 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 dotenv.config();
 
-async function eliminarIndice() {
+async function corregirEstadosClientes() {
   const uri = process.env.MONGODB_URI_LOCAL;
   if (!uri) {
-    console.error("No se encontró la variable MONGODB_URI_LOCAL en .env");
+    console.error("No se encontró MONGODB_URI_LOCAL");
     process.exit(1);
   }
 
@@ -13,21 +13,29 @@ async function eliminarIndice() {
 
   try {
     await client.connect();
-    const db = client.db("test"); // Cambia 'test' si usas otra base
-    const coleccion = db.collection("clientes"); // Cambia 'clientes' si usas otra colección
+    const db = client.db("test"); // cambia si tu BD es otra
+    const clientes = db.collection("clientes");
 
-    await coleccion.dropIndex("idGoogle_1");
-    console.log("Índice 'idGoogle_1' eliminado correctamente");
+    const resultado = await clientes.updateMany(
+      { estado_Emprendedor: { $exists: true } },
+      [
+        {
+          $set: {
+            estado_Cliente: "$estado_Emprendedor"
+          }
+        },
+        {
+          $unset: "estado_Emprendedor"
+        }
+      ]
+    );
+
+    console.log("Clientes corregidos:", resultado.modifiedCount);
   } catch (error) {
-    if (error.codeName === "IndexNotFound") {
-      console.log("El índice 'idGoogle_1' no existe, nada que eliminar");
-    } else {
-      console.error("Error eliminando índice:", error);
-    }
+    console.error("Error corrigiendo clientes:", error);
   } finally {
     await client.close();
   }
 }
 
-// Ejecutar al cargar este archivo
-eliminarIndice();
+corregirEstadosClientes();
