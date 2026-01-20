@@ -1,21 +1,46 @@
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 dotenv.config();
 
+// URI de Railway (tomada de MONGO_URL)
+const uri = process.env.MONGO_URL || "mongodb://mongo:BHFQycLysgYtindKTQJOWyFJUyTNLxiv@mongodb.railway.internal:27017";
+
 async function limpiarClientes() {
-  const client = new MongoClient(process.env.MONGO_URL);
-  await client.connect();
+  const client = new MongoClient(uri);
 
-  const db = client.db("test"); // o tu DB real
-  const clientes = db.collection("clientes");
+  try {
+    await client.connect();
+    console.log("Conectado a MongoDB");
 
-  const res = await clientes.updateMany(
-    { estado_Emprendedor: { $exists: true } },
-    { $unset: { estado_Emprendedor: "", advertencias: "", ultimaAdvertenciaAt: "" } }
-  );
+    const db = client.db("test"); // Tu base de datos
+    const clientes = db.collection("clientes"); // Tu colección de clientes
 
-  console.log("Clientes corregidos:", res.modifiedCount);
-  await client.close();
+    // Actualiza todos los clientes que tengan campos antiguos
+    const resultado = await clientes.updateMany(
+      {
+        $or: [
+          { estado_Emprendedor: { $exists: true } },
+          { advertencias: { $exists: true } },
+          { ultimaAdvertenciaAt: { $exists: true } }
+        ]
+      },
+      {
+        $unset: {
+          estado_Emprendedor: "",
+          advertencias: "",
+          ultimaAdvertenciaAt: ""
+        }
+      }
+    );
+
+    console.log("Clientes corregidos:", resultado.modifiedCount);
+  } catch (err) {
+    console.error("Error al limpiar clientes:", err);
+  } finally {
+    await client.close();
+    console.log("Conexión cerrada");
+  }
 }
 
+// Ejecutar script
 limpiarClientes();
