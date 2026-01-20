@@ -343,6 +343,56 @@ const eliminarFotoPerfil = async (req, res) => {
     res.status(500).json({ msg: 'Error al eliminar foto de perfil', error: error.message })
   }
 }
+/* ============================
+   Actualizar estado (PUT /estado/:id)
+   - Igual comportamiento que Emprendedor: cambio directo sin motivo obligatorio
+============================ */
+const actualizarEstadoClienteById = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { estado, estado_Cliente } = req.body
+    const nuevoEstadoUI = String((estado ?? estado_Cliente ?? '')).trim()
+
+    if (!nuevoEstadoUI) return res.status(400).json({ msg: 'Debes enviar "estado" o "estado_Cliente"' })
+
+    const PERMITIDOS = ['Correcto','Advertencia1','Advertencia2','Advertencia3','Suspendido']
+    if (!PERMITIDOS.includes(nuevoEstadoUI)) {
+      return res.status(400).json({ msg: `Estado inválido. Permitidos: ${PERMITIDOS.join(', ')}` })
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).json({ msg: 'El ID no es válido' })
+
+    const cliente = await Cliente.findById(id)
+    if (!cliente) return res.status(404).json({ msg: 'Cliente no encontrado' })
+
+    // "Correcto" -> "Activo"
+    const target = (nuevoEstadoUI === 'Correcto') ? 'Activo' : nuevoEstadoUI
+
+    // Aplicar reglas encapsuladas en el modelo
+    try {
+      cliente.aplicarEstadoCliente(target)
+    } catch (e) {
+      return res.status(400).json({ msg: e.message })
+    }
+
+    await cliente.save()
+
+    const estadoUI =
+      (cliente.status === false) ? 'Suspendido'
+      : (['Advertencia1','Advertencia2','Advertencia3','Suspendido'].includes(cliente.estado_Cliente)
+          ? cliente.estado_Cliente
+          : 'Correcto')
+
+    return res.status(200).json({
+      msg: 'Estado actualizado correctamente',
+      estadoUI,
+      estado_Cliente: cliente.estado_Cliente,
+      status: cliente.status
+    })
+  } catch (error) {
+    return res.status(500).json({ msg: 'Error al actualizar el estado', error: error.message })
+  }
+}
 
 /* ============================
    Exports
@@ -350,5 +400,6 @@ const eliminarFotoPerfil = async (req, res) => {
 export {
   registro, confirmarMail, recuperarPassword, comprobarTokenPasword, crearNuevoPassword,
   login, perfil, actualizarPassword, actualizarPerfil, verClientes,
-  actualizarCliente, eliminarCliente, actualizarFotoPerfil, eliminarFotoPerfil
+  actualizarCliente, eliminarCliente, actualizarFotoPerfil, eliminarFotoPerfil, actualizarEstadoClienteById 
 }
+
