@@ -3,7 +3,7 @@ import { Router } from 'express'
 import {
   registro, confirmarMail, recuperarPassword, comprobarTokenPasword, crearNuevoPassword,
   login, verClientes, actualizarCliente, eliminarCliente, perfil, actualizarPassword,
-  actualizarPerfil, actualizarFotoPerfil, eliminarFotoPerfil
+  actualizarPerfil, actualizarFotoPerfil, eliminarFotoPerfil, actualizarEstadoClienteById 
 } from '../controllers/cliente_controllers.js'
 import { verificarTokenJWT } from '../middleware/JWT.js'
 import multer from 'multer'
@@ -48,5 +48,8 @@ router.put('/cliente/:id', verificarTokenJWT, actualizarPerfil)
 router.put('/cliente/actualizarpassword/:id', verificarTokenJWT, actualizarPassword)
 router.put('/cliente/foto/:id', verificarTokenJWT, uploadClienteFoto.single('foto'), actualizarFotoPerfil)
 router.delete('/cliente/foto/:id', verificarTokenJWT, eliminarFotoPerfil)
+// Estado (solo Admin)
+router.put('/estado/:id', verificarTokenJWT, requireAdmin, actualizarEstadoClienteById)
 
 export default router
+
